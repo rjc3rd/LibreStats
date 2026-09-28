@@ -1,6 +1,6 @@
 <?php /* Login. Vars: $error, $csrf. */ ls_render('head', ['title' => 'Log in · LibreStats']); ?>
 <main class="ls-auth"><div class="ls-card">
-  <span class="ls-logo"><?php ls_render('logo'); ?>LibreStats</span>
+  <span class="ls-logo"><?php ls_render('logo'); ?></span>
   <h1>Log in</h1>
   <p>See how many people visit your websites.</p>
   <form class="ls-form" method="post">

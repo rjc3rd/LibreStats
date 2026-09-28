@@ -19,4 +19,8 @@ return [
     // Behind a reverse proxy or CDN, list its addresses so the visitor's real address (used only
     // for the daily hash and the country lookup, never stored) is read from X-Forwarded-For.
     'trusted_proxies' => [],
+
+    // Dashboard look: a folder name under themes/ (or under one of theme_paths).
+    'theme' => 'default',
+    'theme_paths' => [],
 ];

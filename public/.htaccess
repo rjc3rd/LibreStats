@@ -3,6 +3,9 @@
 
 Options -Indexes
 
+# Let PHP see "Authorization: Bearer …" for the data API (api.php).
+CGIPassAuth On
+
 <IfModule mod_headers.c>
     Header always set X-Content-Type-Options "nosniff"
     Header always set Referrer-Policy "no-referrer"

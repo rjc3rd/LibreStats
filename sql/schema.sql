@@ -144,3 +144,17 @@ CREATE TABLE IF NOT EXISTS login_failures (
   at          DATETIME NOT NULL,
   KEY idx_login_failures (who, at)
 ) ENGINE=InnoDB;
+
+-- Keys for the data API (public/api.php), for apps that show LibreStats numbers in their own pages
+-- (a hosting panel, say). Only a hash of the key is stored; `sites` limits which websites it can
+-- read (comma-separated domains), or '*' for all.
+CREATE TABLE IF NOT EXISTS api_keys (
+  id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  key_hash    BINARY(32) NOT NULL,
+  label       VARCHAR(100) NOT NULL,
+  sites       TEXT NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used   DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_api_keys_hash (key_hash)
+) ENGINE=InnoDB;

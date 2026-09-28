@@ -7,6 +7,7 @@
 <meta name="robots" content="noindex">
 <title><?= h($title ?? 'LibreStats') ?></title>
 <link rel="stylesheet" href="<?= h(ls_asset('theme.css')) ?>">
+<?php if (ls_theme_file('assets', 'custom.css', true)): ?><link rel="stylesheet" href="<?= h(ls_asset('custom.css')) ?>"><?php endif; ?>
 <link rel="icon" href="<?= h(ls_asset('icon.svg')) ?>" type="image/svg+xml">
 </head>
 <body>

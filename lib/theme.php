@@ -1,22 +1,46 @@
 <?php
 // Themes live in themes/<name>/: templates/*.php for the pages and assets/* for CSS, JS and
 // images. A theme only needs the files it changes; anything missing comes from themes/default.
-// Choose one with 'theme' => 'name' in config.php.
+// Choose one with 'theme' => 'name' in config.php. Themes kept elsewhere (say, a private folder
+// with your own branding) are found through 'theme_paths' => ['/path/to/themes'] in config.php.
+// A theme's assets/custom.css is loaded after the main stylesheet, so a theme can just change the
+// color and font tokens instead of copying everything.
 
 declare(strict_types=1);
+
+function ls_theme_dirs(): array
+{
+    $dirs = [];
+    foreach ((array) (ls_config()['theme_paths'] ?? []) as $path) {
+        $dirs[] = rtrim((string) $path, '/');
+    }
+    $dirs[] = LS_ROOT . '/themes';
+    return $dirs;
+}
 
 function ls_theme(): string
 {
     $name = (string) (ls_config()['theme'] ?? 'default');
-    return preg_match('~^[a-z0-9-]+$~', $name) && is_dir(LS_ROOT . "/themes/$name") ? $name : 'default';
+    if (!preg_match('~^[a-z0-9-]+$~', $name)) {
+        return 'default';
+    }
+    foreach (ls_theme_dirs() as $dir) {
+        if (is_dir("$dir/$name")) {
+            return $name;
+        }
+    }
+    return 'default';
 }
 
-function ls_theme_file(string $kind, string $file): ?string
+// The active theme's copy of a file, or the default theme's. $onlyActive skips the fallback.
+function ls_theme_file(string $kind, string $file, bool $onlyActive = false): ?string
 {
-    foreach ([ls_theme(), 'default'] as $theme) {
-        $path = LS_ROOT . "/themes/$theme/$kind/$file";
-        if (is_file($path)) {
-            return $path;
+    foreach ($onlyActive ? [ls_theme()] : array_unique([ls_theme(), 'default']) as $theme) {
+        foreach (ls_theme_dirs() as $dir) {
+            $path = "$dir/$theme/$kind/$file";
+            if (is_file($path)) {
+                return $path;
+            }
         }
     }
     return null;

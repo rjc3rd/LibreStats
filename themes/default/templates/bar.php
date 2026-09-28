@@ -1,6 +1,6 @@
 <?php /* Top bar: logo, site picker, date range, live count, log out. Uses the page's variables. */ ?>
 <header class="ls-bar"><div class="ls-bar-inner">
-  <a class="ls-logo" href="./"><?php ls_render('logo'); ?>LibreStats</a>
+  <a class="ls-logo" href="./"><?php ls_render('logo'); ?></a>
   <form class="ls-controls" method="get" data-autosubmit>
     <label class="ls-sr" for="ls-site">Website</label>
     <select class="ls-select" id="ls-site" name="site">

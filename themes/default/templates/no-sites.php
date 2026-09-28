@@ -1,6 +1,6 @@
 <?php /* Logged in, no websites yet. Vars: $user, $csrf, $error. */ ls_render('head', ['title' => 'Add a website · LibreStats']); ?>
 <main class="ls-auth"><div class="ls-card">
-  <span class="ls-logo"><?php ls_render('logo'); ?>LibreStats</span>
+  <span class="ls-logo"><?php ls_render('logo'); ?></span>
   <h1>Add your first website</h1>
   <p>Which website should LibreStats count? You’ll get its one-line tracking code next.</p>
   <form class="ls-form" method="post">

@@ -1,6 +1,6 @@
 <?php /* First run: create the owner's login. Vars: $error, $csrf. */ ls_render('head', ['title' => 'Set up LibreStats']); ?>
 <main class="ls-auth"><div class="ls-card">
-  <span class="ls-logo"><?php ls_render('logo'); ?>LibreStats</span>
+  <span class="ls-logo"><?php ls_render('logo'); ?></span>
   <h1>Welcome! Create your login.</h1>
   <p>This is the first visit to your new LibreStats. Choose the username (or email) and password you’ll use to see your numbers. This page only appears once.</p>
   <form class="ls-form" method="post">
