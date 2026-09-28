@@ -37,9 +37,25 @@ The small script runs only in real browsers and sends a short note to your own L
 
 PHP 8.2 or newer and MySQL or MariaDB. No other services.
 
+## Installing (early, for testing)
+
+1. Put the whole folder on your server and make **`public/`** the website's root. Everything else (code, settings, tools) must stay outside it.
+2. Create a MariaDB/MySQL database and user, copy `config.example.php` to `config.php`, and fill in the database details.
+3. Create the tables: `php bin/install.php`
+4. Add each website you want to count: `php bin/site.php add example.com America/Chicago`
+5. Load the country data (free [DB-IP Lite](https://db-ip.com), updated monthly): `php bin/geo-update.php`
+6. Add two cron jobs: `php bin/maintain.php --quiet` daily, and `php bin/geo-update.php --quiet` monthly.
+7. Put the one-line script on your pages.
+
+Run the checks any time with `php tests/run.php` (it uses a separate `<database>_test` database).
+
 ## Themes
 
 LibreStats ships with a clean default theme. Every color, font, and chart style lives in the theme, so you can make it match your own site without touching the code.
+
+## Credits
+
+Country data: [IP Geolocation by DB-IP](https://db-ip.com), licensed under CC BY 4.0.
 
 ## License
 

@@ -1,0 +1,13 @@
+# LibreStats public folder (Apache). Only this folder should be the web root; lib/, bin/, sql/,
+# tests/ and config.php stay outside it.
+
+Options -Indexes
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set Referrer-Policy "no-referrer"
+    # The tracking script can be cached for a day; the collector never.
+    <Files "s.js">
+        Header set Cache-Control "public, max-age=86400"
+    </Files>
+</IfModule>
