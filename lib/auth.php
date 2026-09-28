@@ -57,7 +57,7 @@ function ls_login(PDO $pdo, string $email, string $password, string $ip): ?strin
     $ok = password_verify($password, $user['password_hash'] ?? '$2y$10$' . str_repeat('x', 53));
     if (!$user || !$ok) {
         $pdo->prepare("INSERT INTO login_failures (who, at) VALUES (:w, :t)")->execute(['w' => $who, 't' => ls_now()]);
-        return 'That email and password don’t match.';
+        return 'That username and password don’t match.';
     }
     ls_session_start();
     session_regenerate_id(true);

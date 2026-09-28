@@ -109,11 +109,17 @@ function ls_goal_move(PDO $pdo, int $siteId, int $goalId, int $direction): void
     }
 }
 
+// A login name is an email address or a username (3 to 64 letters, digits, dots, dashes, underscores).
+function ls_valid_login(string $login): bool
+{
+    return (bool) filter_var($login, FILTER_VALIDATE_EMAIL) || (bool) preg_match('~^[a-z0-9._-]{3,64}$~', $login);
+}
+
 function ls_user_add(PDO $pdo, string $email, string $password): ?string
 {
     $email = strtolower(trim($email));
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        return 'Please enter a valid email address.';
+    if (!ls_valid_login($email)) {
+        return 'Please enter an email address, or a username of 3 to 64 letters, digits, dots, dashes or underscores.';
     }
     if (strlen($password) < 10) {
         return 'Please use a password of 10 characters or more.';

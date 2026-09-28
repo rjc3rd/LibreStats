@@ -26,8 +26,8 @@ if ($noUsers) {
     if ($action === 'setup' && ls_csrf_ok()) {
         $email = strtolower(trim((string) ($_POST['email'] ?? '')));
         $password = (string) ($_POST['password'] ?? '');
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $error = 'Please enter a valid email address.';
+        if (!ls_valid_login($email)) {
+            $error = 'Please enter an email address, or a username of 3 to 64 letters, digits, dots, dashes or underscores.';
         } elseif (strlen($password) < 10) {
             $error = 'Please use a password of 10 characters or more.';
         } elseif ($password !== (string) ($_POST['password2'] ?? '')) {

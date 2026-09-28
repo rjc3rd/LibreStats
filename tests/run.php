@@ -128,6 +128,7 @@ ls_site_remove($pdo, $nid);
 check('deleting a site deletes its goals too', one($pdo, "SELECT COUNT(*) FROM goals WHERE site_id = $nid") == 0 && one($pdo, "SELECT COUNT(*) FROM sites WHERE id = $nid") == 0);
 check('logins need a real email and a long password', ls_user_add($pdo, 'x', 'long-enough-1') !== null && ls_user_add($pdo, 'a@b.test', 'short') !== null);
 check('adding a login works', ls_user_add($pdo, 'a@b.test', 'long-enough-1') === null);
+check('a plain username works as a login too', ls_user_add($pdo, 'ranzy', 'long-enough-1') === null && ls_user_add($pdo, 'x', 'long-enough-1') !== null && ls_user_add($pdo, 'bad name!', 'long-enough-1') !== null);
 $uid = (int) one($pdo, "SELECT id FROM users WHERE email = 'a@b.test'");
 check('changing a password needs the current one', ls_user_password($pdo, $uid, 'wrong', 'another-long-1') !== null && ls_user_password($pdo, $uid, 'long-enough-1', 'another-long-1') === null);
 check('login works with the new password', ls_login($pdo, 'a@b.test', 'another-long-1', '203.0.113.50') === null);

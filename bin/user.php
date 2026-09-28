@@ -1,6 +1,6 @@
 <?php
 // Dashboard logins.
-//   php bin/user.php add you@example.com      (asks for the password; it isn't shown)
+//   php bin/user.php add ranzy                (a username or an email; asks for the password, not shown)
 //   php bin/user.php password you@example.com
 //   php bin/user.php list
 //   php bin/user.php remove you@example.com
@@ -32,8 +32,8 @@ $pdo = ls_db();
 switch ($cmd) {
     case 'add':
     case 'password':
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            exit("Give an email address.\n");
+        if (!ls_valid_login($email)) {
+            exit("Give an email address or a username (3-64 letters, digits, . _ -).\n");
         }
         $password = ask_password();
         if ($cmd === 'add') {

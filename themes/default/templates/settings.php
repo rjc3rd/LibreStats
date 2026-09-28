@@ -85,7 +85,7 @@ ls_render('bar', get_defined_vars());
       <ul class="ls-list ls-sites"><?php foreach ($users as $u): ?><li><?= h($u['email']) ?><?= $u['email'] === $user['email'] ? ' <small>you</small>' : '' ?></li><?php endforeach; ?></ul>
       <form class="ls-form ls-form-tight" method="post" action="<?= $action ?>">
         <?= $hidden('user_add') ?>
-        <label>Their email<input class="ls-input" type="email" name="email" autocomplete="off" required></label>
+        <label>Their username or email<input class="ls-input" type="text" name="email" autocapitalize="none" spellcheck="false" autocomplete="off" required></label>
         <label>A password for them (10 characters or more)<input class="ls-input" type="password" name="password" autocomplete="new-password" minlength="10" required></label>
         <div><button class="ls-btn" type="submit">Add login</button></div>
       </form>
