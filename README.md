@@ -4,7 +4,7 @@ Privacy-first website statistics you host yourself. Free and open source.
 
 LibreStats counts the real people visiting your website, not bots and server noise, without cookies, without storing IP addresses, and without sending anything to a third party. Your numbers stay on your own server.
 
-> **Status:** early development. Not ready to install yet.
+> **Status:** early development. It works end to end (tracking, dashboard, login), but expect changes before the first release.
 
 ## What it will show
 
@@ -46,6 +46,11 @@ PHP 8.2 or newer and MySQL or MariaDB. No other services.
 5. Load the country data (free [DB-IP Lite](https://db-ip.com), updated monthly): `php bin/geo-update.php`
 6. Add two cron jobs: `php bin/maintain.php --quiet` daily, and `php bin/geo-update.php --quiet` monthly.
 7. Put the one-line script on your pages.
+8. Open your LibreStats address in a browser. The first time, it asks you to create your login (you can also add logins with `php bin/user.php add you@example.com`).
+
+Goals show as a funnel on the dashboard: `php bin/goal.php add example.com "Viewed pricing" path /pricing`, or count your own moments from the page with `librestats("Signed up")` and `php bin/goal.php add example.com "Signed up" event "Signed up"`.
+
+Want to see it before any real traffic? `php bin/demo.php` fills a site called `demo.example` with 90 days of made-up visits.
 
 Run the checks any time with `php tests/run.php` (it uses a separate `<database>_test` database).
 

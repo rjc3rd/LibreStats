@@ -136,3 +136,11 @@ CREATE TABLE IF NOT EXISTS users (
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Failed dashboard logins, to slow down password guessing. Keyed by a daily hash like visitors,
+-- never by the address itself; rows older than a day are deleted by bin/maintain.php.
+CREATE TABLE IF NOT EXISTS login_failures (
+  who         BINARY(8) NOT NULL,
+  at          DATETIME NOT NULL,
+  KEY idx_login_failures (who, at)
+) ENGINE=InnoDB;

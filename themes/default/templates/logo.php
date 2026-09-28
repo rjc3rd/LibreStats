@@ -1,0 +1,1 @@
+<svg viewBox="0 0 26 26" aria-hidden="true"><rect class="ls-logo-bar" x="3" y="13" width="5" height="10" rx="1.5"/><rect class="ls-logo-bar" x="10.5" y="8" width="5" height="15" rx="1.5"/><rect class="ls-logo-bar" x="18" y="3" width="5" height="20" rx="1.5"/></svg>

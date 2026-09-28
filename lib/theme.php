@@ -1,0 +1,56 @@
+<?php
+// Themes live in themes/<name>/: templates/*.php for the pages and assets/* for CSS, JS and
+// images. A theme only needs the files it changes; anything missing comes from themes/default.
+// Choose one with 'theme' => 'name' in config.php.
+
+declare(strict_types=1);
+
+function ls_theme(): string
+{
+    $name = (string) (ls_config()['theme'] ?? 'default');
+    return preg_match('~^[a-z0-9-]+$~', $name) && is_dir(LS_ROOT . "/themes/$name") ? $name : 'default';
+}
+
+function ls_theme_file(string $kind, string $file): ?string
+{
+    foreach ([ls_theme(), 'default'] as $theme) {
+        $path = LS_ROOT . "/themes/$theme/$kind/$file";
+        if (is_file($path)) {
+            return $path;
+        }
+    }
+    return null;
+}
+
+// Renders a template with $vars as local variables.
+function ls_render(string $template, array $vars = []): void
+{
+    $file = ls_theme_file('templates', "$template.php");
+    if ($file === null) {
+        throw new RuntimeException("LibreStats: no template $template");
+    }
+    extract($vars, EXTR_SKIP);
+    include $file;
+}
+
+// Address of a theme asset, with a version so browsers pick up changes.
+function ls_asset(string $file): string
+{
+    $path = ls_theme_file('assets', $file);
+    return 'asset.php?f=' . rawurlencode($file) . ($path ? '&v=' . filemtime($path) : '');
+}
+
+function h(string|int|float|null $s): string
+{
+    return htmlspecialchars((string) $s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+function ls_number(int|float $n): string
+{
+    return $n >= 10000 ? number_format($n / 1000, $n >= 100000 ? 0 : 1) . 'k' : number_format($n);
+}
+
+function ls_duration(int $seconds): string
+{
+    return $seconds < 60 ? "{$seconds}s" : intdiv($seconds, 60) . 'm ' . ($seconds % 60) . 's';
+}

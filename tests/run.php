@@ -10,6 +10,7 @@ if (PHP_SAPI !== 'cli') {
 require __DIR__ . '/../lib/bootstrap.php';
 require __DIR__ . '/../lib/collect.php';
 require __DIR__ . '/../lib/maintain.php';
+require __DIR__ . '/../lib/report.php';
 
 $config = ls_config();
 $db = $config['db'];
@@ -89,6 +90,25 @@ check('hits sent from another site are refused', ls_collect($pdo, $pv('https://e
 check('page views need their random id', ls_collect($pdo, $pv('https://example.com/', 'bad'), $server($firefox), $config) === 'ignored: page view without an id');
 check('nothing refused was stored', one($pdo, "SELECT COUNT(*) FROM pageviews") == $before);
 
+echo "Reports\n";
+$today = ls_site_day('America/Chicago');
+$sum = ls_report_summary($pdo, 1, $today, $today);
+check('summary counts visitors, visits and page views', $sum['visitors'] === 2 && $sum['visits'] === 2 && $sum['pageviews'] === 3);
+check('bounce rate: one of two visits saw one page', $sum['bounce_rate'] == 50);
+$top = ls_report_top($pdo, 1, $today, $today, 'page');
+check('top pages, most visited first', $top[0][0] === '/' && $top[0][3] === 2);
+check('sources get friendly names', ls_report_top($pdo, 1, $today, $today, 'source')[0][1] !== '');
+$series = ls_report_series($pdo, 1, date('Y-m-d', strtotime("$today -6 days")), $today);
+check('series fills in quiet days with zero', count($series) === 7 && $series[0][2] === 0 && end($series)[2] === 2);
+$pdo->exec("INSERT INTO goals (site_id, name, kind, target, position) VALUES (1, 'Pricing', 'path', '/pricing', 1), (1, 'Order', 'event', 'Built an order', 2), (1, 'Blog', 'path', '/blog/*', 3)");
+$funnel = ls_report_funnel($pdo, 1, $today, $today);
+check('funnel: each step counts visits that reached it and the steps before', $funnel[0][1] === 1 && $funnel[1][1] === 1 && $funnel[1][2] === 100 && $funnel[2][1] === 0);
+[$f, $t] = ls_range('7d', 'UTC');
+check('a 7-day range is 7 days ending today', $t === ls_site_day('UTC') && (strtotime($t) - strtotime($f)) / 86400 === 6);
+[$f, $t] = ls_range('custom', 'UTC', '2025-03-10', '2025-03-01');
+check('custom range dates are put in order', $f === '2025-03-01' && $t === '2025-03-10');
+check('live count sees people from the last five minutes', ls_report_live($pdo, 1)['visitors'] === 2);
+
 echo "Privacy over time\n";
 $hashToday = ls_visitor_hash(ls_salt($pdo), 1, '203.0.113.7', $firefox);
 $pdo->exec("UPDATE salts SET day = DATE_SUB(day, INTERVAL 1 DAY)");  // pretend today's secret is yesterday's
@@ -107,6 +127,9 @@ check('top pages kept for the month', one($pdo, "SELECT hits FROM monthly_top WH
 check('top events kept for the month', one($pdo, "SELECT hits FROM monthly_top WHERE month = '2025-01-01' AND dimension = 'event' AND value = 'Built an order'") == 1);
 check('raw visits past 13 months deleted', one($pdo, "SELECT COUNT(*) FROM visits") == 0 && one($pdo, "SELECT COUNT(*) FROM pageviews") == 0 && one($pdo, "SELECT COUNT(*) FROM events") == 0);
 check('monthly totals survive the deletion', one($pdo, "SELECT COUNT(*) FROM monthly_totals") == 1);
+$old = ls_report_summary($pdo, 1, '2025-01-01', '2025-01-31');
+check('reports still show a deleted month from its kept totals', $old['visits'] === 2 && $old['pageviews'] === 3);
+check('and its kept top pages', (ls_report_top($pdo, 1, '2024-12-01', '2025-02-28', 'page')[0][3] ?? 0) === 2);
 
 echo "Helpers\n";
 check('Gmail is email, not Google search', ls_known_referrer('mail.google.com')[0] === 'Gmail');

@@ -69,6 +69,7 @@ function ls_maintain(PDO $pdo, array $config): array
 {
     $log = [];
     $log[] = 'old daily secrets deleted: ' . ls_salt_prune($pdo);
+    $pdo->prepare("DELETE FROM login_failures WHERE at < :t")->execute(['t' => gmdate('Y-m-d H:i:s', time() - 86400)]);
     $keep = max(1, (int) ($config['retention_months'] ?? 13));
     foreach ($pdo->query("SELECT id, domain, timezone FROM sites")->fetchAll() as $site) {
         $siteId = (int) $site['id'];
