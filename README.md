@@ -42,13 +42,12 @@ PHP 8.2 or newer and MySQL or MariaDB. No other services.
 1. Put the whole folder on your server and make **`public/`** the website's root. Everything else (code, settings, tools) must stay outside it.
 2. Create a MariaDB/MySQL database and user, copy `config.example.php` to `config.php`, and fill in the database details.
 3. Create the tables: `php bin/install.php`
-4. Add each website you want to count: `php bin/site.php add example.com America/Chicago`
-5. Load the country data (free [DB-IP Lite](https://db-ip.com), updated monthly): `php bin/geo-update.php`
-6. Add two cron jobs: `php bin/maintain.php --quiet` daily, and `php bin/geo-update.php --quiet` monthly.
-7. Put the one-line script on your pages.
-8. Open your LibreStats address in a browser. The first time, it asks you to create your login (you can also add logins with `php bin/user.php add you@example.com`).
+4. Load the country data (free [DB-IP Lite](https://db-ip.com), updated monthly): `php bin/geo-update.php`
+5. Add two cron jobs: `php bin/maintain.php --quiet` daily, and `php bin/geo-update.php --quiet` monthly.
+6. Put the one-line script on your pages.
+7. Open your LibreStats address in a browser. The first time, it asks you to create your login, then your first website. After that, websites, goals and logins are all managed on the dashboard's **Settings** tab (the `bin/` tools do the same from the command line).
 
-Goals show as a funnel on the dashboard: `php bin/goal.php add example.com "Viewed pricing" path /pricing`, or count your own moments from the page with `librestats("Signed up")` and `php bin/goal.php add example.com "Signed up" event "Signed up"`.
+Goals show as a funnel: a goal is reached when a visitor opens a page (like `/pricing`, or `/blog/*` for a whole section) or triggers an event you send from the page with `librestats("Signed up")` or `data-ls-event="Signed up"`. Every list can be downloaded as CSV.
 
 Want to see it before any real traffic? `php bin/demo.php` fills a site called `demo.example` with 90 days of made-up visits.
 

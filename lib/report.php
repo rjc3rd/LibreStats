@@ -117,11 +117,12 @@ function ls_report_series(PDO $pdo, int $siteId, string $from, string $to): arra
 }
 
 // Top items for one dimension. Rows: [value, label, visitors, hits] (visitors = daily uniques).
-// Dimensions: page, entry, exit, source, referrer, campaign, country, browser, os, device, event.
+// Dimensions: page, entry, exit, source, referrer, campaign, utm_source, utm_medium, country, browser, os,
+// device, event, and event:<name> (that event's details).
 function ls_report_top(PDO $pdo, int $siteId, string $from, string $to, string $dim, int $limit = 10): array
 {
     $visitCols = ['entry' => 'entry_path', 'exit' => 'exit_path', 'source' => 'source', 'referrer' => 'referrer_host',
-        'campaign' => 'utm_campaign', 'country' => 'country', 'browser' => 'browser', 'os' => 'os', 'device' => 'device'];
+        'campaign' => 'utm_campaign', 'utm_source' => 'utm_source', 'utm_medium' => 'utm_medium', 'country' => 'country', 'browser' => 'browser', 'os' => 'os', 'device' => 'device'];
     $args = ['s' => $siteId, 'f' => $from, 't' => $to];
     if ($dim === 'page') {
         $sql = "SELECT p.path AS value, COUNT(DISTINCT v.visitor, v.day) AS visitors, COUNT(*) AS hits FROM pageviews p
@@ -129,6 +130,11 @@ function ls_report_top(PDO $pdo, int $siteId, string $from, string $to, string $
     } elseif ($dim === 'event') {
         $sql = "SELECT e.name AS value, COUNT(DISTINCT v.visitor, v.day) AS visitors, COUNT(*) AS hits FROM events e
                 JOIN visits v ON v.id = e.visit_id WHERE e.site_id = :s AND e.day BETWEEN :f AND :t GROUP BY e.name";
+    } elseif (str_starts_with($dim, 'event:')) {
+        // One event's details, e.g. event:Outbound link lists the links that were clicked.
+        $sql = "SELECT e.detail AS value, COUNT(DISTINCT v.visitor, v.day) AS visitors, COUNT(*) AS hits FROM events e
+                JOIN visits v ON v.id = e.visit_id WHERE e.site_id = :s AND e.day BETWEEN :f AND :t AND e.name = :n AND e.detail <> '' GROUP BY e.detail";
+        $args['n'] = substr($dim, 6);
     } elseif (isset($visitCols[$dim])) {
         $col = $visitCols[$dim];
         $sql = "SELECT $col AS value, COUNT(DISTINCT visitor, day) AS visitors, COUNT(*) AS hits FROM visits
@@ -144,7 +150,7 @@ function ls_report_top(PDO $pdo, int $siteId, string $from, string $to, string $
     }
     // Older whole months, from the lists kept for good (entry/exit pages aren't kept).
     [, $months] = ls_split_range($pdo, $siteId, $from, $to);
-    if ($months && !in_array($dim, ['entry', 'exit'], true)) {
+    if ($months && !in_array($dim, ['entry', 'exit', 'utm_source', 'utm_medium'], true) && !str_starts_with($dim, 'event:')) {
         $in = implode(',', array_fill(0, count($months), '?'));
         $stmt = $pdo->prepare("SELECT value, SUM(visitors) visitors, SUM(hits) hits FROM monthly_top WHERE site_id = ? AND dimension = ? AND month IN ($in) GROUP BY value");
         $stmt->execute([$siteId, $dim, ...$months]);
@@ -156,6 +162,21 @@ function ls_report_top(PDO $pdo, int $siteId, string $from, string $to, string $
     }
     usort($rows, fn ($a, $b) => [$b[1], $b[2]] <=> [$a[1], $a[2]]);
     return array_map(fn ($r) => [$r[0], ls_label($dim, $r[0]), $r[1], $r[2]], array_slice($rows, 0, $limit));
+}
+
+// Sends rows [value, label, visitors, hits] as a CSV download.
+function ls_send_csv(string $filename, array $rows, string $hitsName): void
+{
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . preg_replace('~[^a-z0-9._-]~i', '-', $filename) . '"');
+    $out = fopen('php://output', 'w');
+    fputcsv($out, ['item', 'name', 'visitors', $hitsName], ',', '"', '');
+    foreach ($rows as $r) {
+        // Cells starting with = + - @ would run as formulas in spreadsheets: prefix them.
+        $safe = array_map(fn ($c) => is_string($c) && preg_match('~^[=+\-@\t\r]~', $c) ? "'" . $c : $c, $r);
+        fputcsv($out, $safe, ',', '"', '');
+    }
+    fclose($out);
 }
 
 // Friendly name for a stored value.

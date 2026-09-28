@@ -3,8 +3,6 @@
    $summary, $previous, $hasData, $series, $pages, $entries, $sources, $referrers, $campaigns, $countries,
    $devices, $browsers, $systems, $events, $funnel, $live, $scriptUrl. */
 
-$q = fn (array $p) => '?' . http_build_query(array_merge(['site' => $site['domain'], 'range' => $range], $range === 'custom' ? ['from' => $from, 'to' => $to] : [], $p));
-
 // One list card: rows [value, label, visitors, hits]; bars are relative to the top row.
 $list = function (array $rows, string $empty, string $unit = 'visitors', bool $showValue = false) {
     if (!$rows) {
@@ -32,33 +30,10 @@ $change = function (int|float $now, int|float $before) {
 
 ls_render('head', ['title' => $site['name'] . ' · LibreStats']);
 ?>
-<header class="ls-bar"><div class="ls-bar-inner">
-  <a class="ls-logo" href="./"><?php ls_render('logo'); ?>LibreStats</a>
-  <form class="ls-controls" method="get" data-autosubmit>
-    <label class="ls-sr" for="ls-site">Website</label>
-    <select class="ls-select" id="ls-site" name="site">
-      <?php foreach ($sites as $s): ?><option value="<?= h($s['domain']) ?>"<?= $s['id'] === $site['id'] ? ' selected' : '' ?>><?= h($s['domain']) ?></option><?php endforeach; ?>
-    </select>
-    <input type="hidden" name="range" value="<?= h($range === 'custom' ? '30d' : $range) ?>">
-    <noscript><button class="ls-btn" type="submit">Show</button></noscript>
-  </form>
-  <nav class="ls-pills" aria-label="Date range">
-    <?php foreach (LS_RANGES as $key => $name): ?><a href="<?= h($q(['range' => $key, 'from' => null, 'to' => null])) ?>"<?= $range === $key ? ' aria-current="page"' : '' ?>><?= h($name) ?></a><?php endforeach; ?>
-    <a href="#ls-custom" data-toggle="ls-custom"<?= $range === 'custom' ? ' aria-current="page"' : '' ?>>Custom</a>
-  </nav>
-  <form class="ls-custom<?= $range === 'custom' ? ' is-open' : '' ?>" id="ls-custom" method="get">
-    <input type="hidden" name="site" value="<?= h($site['domain']) ?>"><input type="hidden" name="range" value="custom">
-    <label class="ls-sr" for="ls-from">From</label><input class="ls-input" type="date" id="ls-from" name="from" value="<?= h($from) ?>">
-    <label class="ls-sr" for="ls-to">To</label><input class="ls-input" type="date" id="ls-to" name="to" value="<?= h($to) ?>">
-    <button class="ls-btn" type="submit">Show</button>
-  </form>
-  <span class="ls-bar-grow"></span>
-  <span class="ls-live<?= $live['visitors'] ? ' is-live' : '' ?>" data-live="<?= h('api.php?live&site=' . rawurlencode($site['domain'])) ?>"><span><b data-live-count><?= $live['visitors'] ?></b> <span data-live-word><?= $live['visitors'] === 1 ? 'person' : 'people' ?></span> on the site now</span></span>
-  <form class="ls-user" method="post"><input type="hidden" name="action" value="logout"><input type="hidden" name="csrf" value="<?= h($csrf) ?>"><button class="ls-btn" type="submit" title="Logged in as <?= h($user['email']) ?>">Log out</button></form>
-</div></header>
+<?php ls_render('bar', get_defined_vars()); ?>
 
 <main class="ls-main">
-  <div class="ls-heading"><h1><?= h($site['domain']) ?></h1><p><?= h($label) ?> · <?= h(date('M j, Y', strtotime($from))) ?><?= $from !== $to ? ' – ' . h(date('M j, Y', strtotime($to))) : '' ?></p></div>
+  <?php ls_render('tabs', get_defined_vars()); ?>
 
 <?php if (!$hasData): ?>
   <section class="ls-card">
@@ -88,16 +63,7 @@ ls_render('head', ['title' => $site['name'] . ' · LibreStats']);
     </tbody></table></details>
   </section>
 
-  <?php if ($funnel): ?>
-  <section class="ls-card ls-grid">
-    <h2>Goals <small>visits that reached each step</small></h2>
-    <ol class="ls-funnel">
-      <?php foreach ($funnel as [$name, $count, $pct]): ?>
-      <li><b><?= h(ls_number($count)) ?></b><span><?= h($name) ?></span><small><?= $pct === null ? 'first step' : h($pct) . '% of the step before' ?></small></li>
-      <?php endforeach; ?>
-    </ol>
-  </section>
-  <?php endif; ?>
+  <?php ls_render('funnel', get_defined_vars()); ?>
 
   <div class="ls-grid ls-grid-2">
     <section class="ls-card"><h2>Top pages <small>visitors / views</small></h2><?php $list($pages, 'No page views yet.', 'hits'); ?></section>

@@ -10,21 +10,17 @@ if (PHP_SAPI !== 'cli') {
     exit("Run from the command line.\n");
 }
 require __DIR__ . '/../lib/bootstrap.php';
-require __DIR__ . '/../lib/referrer.php';
+require __DIR__ . '/../lib/admin.php';
 
 $pdo = ls_db();
 [$cmd, $domain, $tz] = [$argv[1] ?? '', strtolower($argv[2] ?? ''), $argv[3] ?? 'UTC'];
-$domain = str_starts_with($domain, 'www.') ? substr($domain, 4) : $domain;
+$domain = ls_clean_domain($domain);
 
 switch ($cmd) {
     case 'add':
-        if (!preg_match('~^(?=.{1,253}$)([a-z0-9-]+\.)+[a-z]{2,}$~', $domain)) {
-            exit("Give a domain like example.com\n");
+        if ($problem = ls_site_add($pdo, $domain, $tz)) {
+            exit("$problem\n");
         }
-        if (!in_array($tz, DateTimeZone::listIdentifiers(), true)) {
-            exit("Unknown time zone: $tz (e.g. America/Chicago, Europe/London, UTC)\n");
-        }
-        $pdo->prepare("INSERT INTO sites (domain, name, timezone) VALUES (:d, :n, :t)")->execute(['d' => $domain, 'n' => $domain, 't' => $tz]);
         echo "Added $domain ($tz). Put this in its pages' <head>, with your LibreStats address:\n";
         echo "  <script src=\"https://YOUR-LIBRESTATS/s.js\" data-site=\"$domain\" defer></script>\n";
         break;
@@ -40,10 +36,7 @@ switch ($cmd) {
         if (!$id) {
             exit("No site $domain\n");
         }
-        foreach (['events', 'pageviews', 'visits', 'goals', 'monthly_totals', 'monthly_top'] as $table) {
-            $pdo->prepare("DELETE FROM $table WHERE site_id = :s")->execute(['s' => $id]);
-        }
-        $pdo->prepare("DELETE FROM sites WHERE id = :s")->execute(['s' => $id]);
+        ls_site_remove($pdo, $id);
         echo "Removed $domain and all its numbers.\n";
         break;
     default:

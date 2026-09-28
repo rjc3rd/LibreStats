@@ -13,6 +13,7 @@ if (PHP_SAPI !== 'cli') {
 }
 require __DIR__ . '/../lib/bootstrap.php';
 require __DIR__ . '/../lib/collect.php';
+require __DIR__ . '/../lib/admin.php';
 
 $pdo = ls_db();
 [$cmd, $domain, $name, $kind, $target] = array_pad(array_slice($argv, 1), 5, '');
@@ -23,13 +24,9 @@ if (!$site) {
 $sid = (int) $site['id'];
 switch ($cmd) {
     case 'add':
-        if ($name === '' || !in_array($kind, ['path', 'event'], true) || $target === '') {
-            exit("Usage: php bin/goal.php add example.com \"Name\" path|event TARGET\n");
+        if ($problem = ls_goal_add($pdo, $sid, $name, $kind, $target)) {
+            exit("$problem\nUsage: php bin/goal.php add example.com \"Name\" path|event TARGET\n");
         }
-        $stmt = $pdo->prepare("SELECT COALESCE(MAX(position), 0) + 1 FROM goals WHERE site_id = :s");
-        $stmt->execute(['s' => $sid]);
-        $pdo->prepare("INSERT INTO goals (site_id, name, kind, target, position) VALUES (:s, :n, :k, :t, :p)")
-            ->execute(['s' => $sid, 'n' => $name, 'k' => $kind, 't' => $target, 'p' => (int) $stmt->fetchColumn()]);
         echo "Added goal \"$name\".\n";
         break;
     case 'list':

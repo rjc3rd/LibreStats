@@ -11,6 +11,7 @@ if (PHP_SAPI !== 'cli') {
     exit("Run from the command line.\n");
 }
 require __DIR__ . '/../lib/bootstrap.php';
+require __DIR__ . '/../lib/admin.php';
 
 function ask_password(): string
 {
@@ -34,11 +35,11 @@ switch ($cmd) {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             exit("Give an email address.\n");
         }
-        $hash = password_hash(ask_password(), PASSWORD_DEFAULT);
+        $password = ask_password();
         if ($cmd === 'add') {
-            $pdo->prepare("INSERT INTO users (email, password_hash) VALUES (:e, :h)")->execute(['e' => $email, 'h' => $hash]);
-            echo "Added $email.\n";
+            echo ($problem = ls_user_add($pdo, $email, $password)) ? "$problem\n" : "Added $email.\n";
         } else {
+            $hash = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("UPDATE users SET password_hash = :h WHERE email = :e");
             $stmt->execute(['e' => $email, 'h' => $hash]);
             echo $stmt->rowCount() ? "Password changed.\n" : "No user $email.\n";

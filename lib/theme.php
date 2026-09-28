@@ -54,3 +54,20 @@ function ls_duration(int $seconds): string
 {
     return $seconds < 60 ? "{$seconds}s" : intdiv($seconds, 60) . 'm ' . ($seconds % 60) . 's';
 }
+
+// Dashboard address keeping the site, range and custom dates; $change overrides (null removes).
+function ls_link(array $site, string $range, string $from, string $to, array $change = []): string
+{
+    $q = ['site' => $site['domain'], 'range' => $range] + ($range === 'custom' ? ['from' => $from, 'to' => $to] : []);
+    foreach ($change as $k => $v) {
+        if ($v === null) {
+            unset($q[$k]);
+        } else {
+            $q[$k] = $v;
+        }
+    }
+    if (($q['range'] ?? '') !== 'custom') {
+        unset($q['from'], $q['to']);
+    }
+    return '?' . http_build_query($q);
+}

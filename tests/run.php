@@ -7,10 +7,14 @@ declare(strict_types=1);
 if (PHP_SAPI !== 'cli') {
     exit("Run from the command line.\n");
 }
+// Output is held back until the end, so login sessions and CSV headers can be tested like on a page.
+ob_start();
 require __DIR__ . '/../lib/bootstrap.php';
 require __DIR__ . '/../lib/collect.php';
 require __DIR__ . '/../lib/maintain.php';
 require __DIR__ . '/../lib/report.php';
+require __DIR__ . '/../lib/admin.php';
+require __DIR__ . '/../lib/auth.php';
 
 $config = ls_config();
 $db = $config['db'];
@@ -108,6 +112,28 @@ check('a 7-day range is 7 days ending today', $t === ls_site_day('UTC') && (strt
 [$f, $t] = ls_range('custom', 'UTC', '2025-03-10', '2025-03-01');
 check('custom range dates are put in order', $f === '2025-03-01' && $t === '2025-03-10');
 check('live count sees people from the last five minutes', ls_report_live($pdo, 1)['visitors'] === 2);
+
+echo "Settings\n";
+check('a pasted address becomes a plain domain', ls_clean_domain(' https://WWW.Example.org/some/page ') === 'example.org');
+check('adding a site checks the domain', ls_site_add($pdo, 'not a domain', 'UTC') !== null && ls_site_add($pdo, 'new.example', 'Nowhere/Zone') !== null);
+check('adding a site works, once', ls_site_add($pdo, 'new.example', 'Europe/London') === null && ls_site_add($pdo, 'new.example', 'UTC') !== null);
+$nid = (int) one($pdo, "SELECT id FROM sites WHERE domain = 'new.example'");
+ls_goal_add($pdo, $nid, 'A', 'path', '/a'); ls_goal_add($pdo, $nid, 'B', 'event', 'B'); ls_goal_add($pdo, $nid, 'C', 'path', '/c/*');
+check('page goals must start with /', ls_goal_add($pdo, $nid, 'D', 'path', 'd') !== null);
+ls_goal_move($pdo, $nid, (int) one($pdo, "SELECT id FROM goals WHERE site_id = $nid AND name = 'C'"), -1);
+check('goals move in the funnel', implode('', array_column(ls_goals($pdo, $nid), 'name')) === 'ACB');
+ls_goal_move($pdo, $nid, (int) one($pdo, "SELECT id FROM goals WHERE site_id = $nid AND name = 'A'"), -1);
+check('the first goal can\'t move earlier', implode('', array_column(ls_goals($pdo, $nid), 'name')) === 'ACB');
+ls_site_remove($pdo, $nid);
+check('deleting a site deletes its goals too', one($pdo, "SELECT COUNT(*) FROM goals WHERE site_id = $nid") == 0 && one($pdo, "SELECT COUNT(*) FROM sites WHERE id = $nid") == 0);
+check('logins need a real email and a long password', ls_user_add($pdo, 'x', 'long-enough-1') !== null && ls_user_add($pdo, 'a@b.test', 'short') !== null);
+check('adding a login works', ls_user_add($pdo, 'a@b.test', 'long-enough-1') === null);
+$uid = (int) one($pdo, "SELECT id FROM users WHERE email = 'a@b.test'");
+check('changing a password needs the current one', ls_user_password($pdo, $uid, 'wrong', 'another-long-1') !== null && ls_user_password($pdo, $uid, 'long-enough-1', 'another-long-1') === null);
+check('login works with the new password', ls_login($pdo, 'a@b.test', 'another-long-1', '203.0.113.50') === null);
+for ($i = 0; $i < 8; $i++) { ls_login($pdo, 'a@b.test', 'wrong', '203.0.113.51'); }
+check('too many wrong passwords pause logins from that address', str_starts_with((string) ls_login($pdo, 'a@b.test', 'another-long-1', '203.0.113.51'), 'Too many'));
+check('csv cells that look like formulas are made safe', (function () { ob_start(); ls_send_csv('t.csv', [['=cmd()', 'x', 1, 1]], 'n'); return str_contains(ob_get_clean(), "'=cmd()"); })());
 
 echo "Privacy over time\n";
 $hashToday = ls_visitor_hash(ls_salt($pdo), 1, '203.0.113.7', $firefox);
