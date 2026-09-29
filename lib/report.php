@@ -192,6 +192,21 @@ function ls_label(string $dim, string $value): string
     };
 }
 
+// The last time each of these websites had activity (UTC, as the database keeps it), by site id. A website with
+// no raw data left, or none yet, is left out. Apps use it to tell "counting" from "the script isn't on the page yet".
+function ls_sites_last_hit(PDO $pdo, array $siteIds): array
+{
+    $ids = array_values(array_filter(array_map('intval', $siteIds), fn ($id) => $id > 0));
+    if (!$ids) {
+        return [];
+    }
+    $last = [];
+    foreach ($pdo->query('SELECT site_id, MAX(last_at) AS t FROM visits WHERE site_id IN (' . implode(',', $ids) . ') GROUP BY site_id')->fetchAll() as $row) {
+        $last[(int) $row['site_id']] = (string) $row['t'];
+    }
+    return $last;
+}
+
 // People on the site in the last five minutes, and the pages they're on.
 function ls_report_live(PDO $pdo, int $siteId): array
 {

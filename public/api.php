@@ -2,7 +2,7 @@
 // JSON data for dashboards.
 //   Logged-in dashboard users:  api.php?live&site=example.com   (the live counter; not when 'dashboard' => false)
 //   Other apps, with a key made by bin/apikey.php, sent as "Authorization: Bearer <key>":
-//     api.php?report=sites
+//     api.php?report=sites                                          (each website's domain, name, time zone and last_hit)
 //     api.php?report=overview&site=example.com&range=30d            (everything on the Overview)
 //     api.php?report=top&site=example.com&dim=page&limit=100&range=… (one full list)
 //     api.php?report=live&site=example.com
@@ -10,6 +10,9 @@
 //   A key made with --team can also manage viewers (people who can only look) for the teams the app runs:
 //     POST api.php?team   with JSON {"op": "team.list|team.create|team.password|team.remove|team.sites", "acct": "…", …}
 //     (lib/team.php, ls_team_api(), and the README describe each operation)
+//   A key made with --manage-sites (and able to read every website) can also add and remove websites:
+//     POST api.php?sites  with JSON {"op": "site.add|site.remove", "domain": "example.com", …}
+//     (lib/sites_api.php, ls_sites_api(), and the README describe each operation)
 // A key only ever sees the websites it was made for, and can only share those with a team.
 
 declare(strict_types=1);
@@ -20,6 +23,7 @@ require __DIR__ . '/../lib/report.php';
 require __DIR__ . '/../lib/collect.php';
 require __DIR__ . '/../lib/admin.php';
 require __DIR__ . '/../lib/team.php';
+require __DIR__ . '/../lib/sites_api.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
@@ -39,7 +43,7 @@ $allowed = null;
 $key = null;
 $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
 if (preg_match('~^Bearer\s+(ls_[a-f0-9]{48})$~', $auth, $m)) {
-    $stmt = $pdo->prepare("SELECT id, sites, team FROM api_keys WHERE key_hash = :h");
+    $stmt = $pdo->prepare("SELECT id, sites, team, manage_sites FROM api_keys WHERE key_hash = :h");
     $stmt->execute(['h' => hash('sha256', $m[1], true)]);
     $key = $stmt->fetch();
     if (!$key) {
@@ -72,13 +76,34 @@ if (isset($_GET['team'])) {
     ls_api_out($status, $answer);
 }
 
+// Adding and removing websites: the same rules (a key, never a login session, and only by POST).
+if (isset($_GET['sites'])) {
+    if (!$key || !$key['manage_sites']) {
+        ls_api_out(403, ['ok' => false, 'error' => 'this key can’t manage websites']);
+    }
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        ls_api_out(405, ['ok' => false, 'error' => 'use POST']);
+    }
+    $body = (string) file_get_contents('php://input', false, null, 0, 16385);
+    $input = strlen($body) <= 16384 ? json_decode($body, true) : null;
+    if (!is_array($input)) {
+        ls_api_out(400, ['ok' => false, 'error' => 'send a JSON object, up to 16 KB']);
+    }
+    [$status, $answer] = ls_sites_api($pdo, $key, $input);
+    ls_api_out($status, $answer);
+}
+
 $sites = array_values(array_filter(
     $pdo->query("SELECT id, domain, name, timezone FROM sites ORDER BY domain")->fetchAll(),
     fn ($s) => $allowed === null || in_array($s['domain'], $allowed, true)
 ));
 $report = isset($_GET['live']) ? 'live' : (string) ($_GET['report'] ?? '');
 if ($report === 'sites') {
-    ls_api_out(200, ['sites' => array_map(fn ($s) => ['domain' => $s['domain'], 'name' => $s['name'], 'timezone' => $s['timezone']], $sites)]);
+    $last = ls_sites_last_hit($pdo, array_column($sites, 'id'));
+    ls_api_out(200, ['sites' => array_map(fn ($s) => [
+        'domain' => $s['domain'], 'name' => $s['name'], 'timezone' => $s['timezone'],
+        'last_hit' => isset($last[(int) $s['id']]) ? ls_iso($last[(int) $s['id']]) : null,
+    ], $sites)]);
 }
 
 $site = null;

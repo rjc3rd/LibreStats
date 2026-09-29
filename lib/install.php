@@ -23,7 +23,10 @@ function ls_migrate(PDO $pdo): array
             'team' => 'VARCHAR(64) NULL AFTER role',
             'sites' => "VARCHAR(2000) NOT NULL DEFAULT '*' AFTER team",
         ],
-        'api_keys' => ['team' => 'TINYINT(1) NOT NULL DEFAULT 0 AFTER sites'],
+        'api_keys' => [
+            'team' => 'TINYINT(1) NOT NULL DEFAULT 0 AFTER sites',
+            'manage_sites' => 'TINYINT(1) NOT NULL DEFAULT 0 AFTER team',
+        ],
     ];
     $changes = [];
     foreach ($added as $table => $columns) {

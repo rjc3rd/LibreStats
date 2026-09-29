@@ -155,12 +155,14 @@ CREATE TABLE IF NOT EXISTS login_failures (
 -- (a hosting panel, say). Only a hash of the key is stored. `sites` limits which websites it can
 -- read (comma-separated domains), or '*' for all. `team` is 1 when the app may also add and remove
 -- viewers for the teams it manages (never for more websites than the key itself can read).
+-- `manage_sites` is 1 when the app may also add and remove websites (only for a key that reads all of them).
 CREATE TABLE IF NOT EXISTS api_keys (
   id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   key_hash    BINARY(32) NOT NULL,
   label       VARCHAR(100) NOT NULL,
   sites       TEXT NOT NULL,
   team        TINYINT(1) NOT NULL DEFAULT 0,
+  manage_sites TINYINT(1) NOT NULL DEFAULT 0,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_used   DATETIME NULL,
   PRIMARY KEY (id),

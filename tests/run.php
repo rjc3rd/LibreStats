@@ -17,6 +17,7 @@ require __DIR__ . '/../lib/admin.php';
 require __DIR__ . '/../lib/auth.php';
 require __DIR__ . '/../lib/install.php';
 require __DIR__ . '/../lib/team.php';
+require __DIR__ . '/../lib/sites_api.php';
 
 $config = ls_config();
 $db = $config['db'];
@@ -263,6 +264,54 @@ check('a team id has to be short and plain, and every request names one', $api([
     && $api(['op' => 'team.list', 'acct' => str_repeat('a', 65)])[0] === 400 && $api(['op' => 'team.list', 'acct' => ['7']])[0] === 400);
 check('an unknown operation is refused', $api(['op' => 'team.destroy', 'acct' => '9'])[0] === 400);
 
+echo "Websites through the API\n";
+$wkey = ['id' => 2, 'sites' => '*', 'team' => 0, 'manage_sites' => 1];
+$sapi = fn (array $input, array $k = null) => ls_sites_api($pdo, $k ?? $wkey, $input);
+[$st, $out] = $sapi(['op' => 'site.add', 'domain' => 'https://www.Shop.Example.org/x', 'timezone' => 'America/Chicago']);
+check('site.add makes a website, with the domain tidied up and the time zone asked for',
+    $st === 200 && $out === ['ok' => true, 'created' => true] && one($pdo, "SELECT timezone FROM sites WHERE domain = 'shop.example.org'") === 'America/Chicago');
+check('the time zone is UTC when none is given', $sapi(['op' => 'site.add', 'domain' => 'plain.example.org']) === [200, ['ok' => true, 'created' => true]]
+    && one($pdo, "SELECT timezone FROM sites WHERE domain = 'plain.example.org'") === 'UTC');
+check('adding one that is already there is fine and changes nothing', $sapi(['op' => 'site.add', 'domain' => 'shop.example.org', 'timezone' => 'UTC']) === [200, ['ok' => true, 'created' => false]]
+    && one($pdo, "SELECT COUNT(*) FROM sites WHERE domain = 'shop.example.org'") == 1 && one($pdo, "SELECT timezone FROM sites WHERE domain = 'shop.example.org'") === 'America/Chicago');
+check('a bad time zone is refused and nothing is made', $sapi(['op' => 'site.add', 'domain' => 'badzone.example.org', 'timezone' => 'Mars/Base'])[0] === 400
+    && one($pdo, "SELECT COUNT(*) FROM sites WHERE domain = 'badzone.example.org'") == 0);
+check('a missing or bad domain is refused', $sapi(['op' => 'site.add'])[0] === 400 && $sapi(['op' => 'site.add', 'domain' => 'not a domain'])[0] === 400
+    && $sapi(['op' => 'site.add', 'domain' => ['x.org']])[0] === 400 && $sapi(['op' => 'site.remove', 'domain' => ''])[0] === 400);
+check('an unknown operation is refused', $sapi(['op' => 'site.wipe', 'domain' => 'shop.example.org'])[0] === 400 && $sapi(['domain' => 'shop.example.org'])[0] === 400);
+$narrow = ['id' => 3, 'sites' => 'example.com', 'team' => 0, 'manage_sites' => 1];
+check('a key that can\'t read every website can\'t add or remove them', $sapi(['op' => 'site.add', 'domain' => 'nope.example.org'], $narrow)[0] === 403
+    && $sapi(['op' => 'site.remove', 'domain' => 'shop.example.org'], $narrow)[0] === 403 && one($pdo, "SELECT COUNT(*) FROM sites WHERE domain = 'nope.example.org'") == 0
+    && one($pdo, "SELECT COUNT(*) FROM sites WHERE domain = 'shop.example.org'") == 1);
+$shop = (int) one($pdo, "SELECT id FROM sites WHERE domain = 'shop.example.org'");
+$plain = (int) one($pdo, "SELECT id FROM sites WHERE domain = 'plain.example.org'");
+$third = (int) one($pdo, "SELECT id FROM sites WHERE domain = 'third.net'");
+$hit = fn (string $domain, string $k) => ls_collect($pdo, ['n' => 'pageview', 'd' => $domain, 'u' => "https://$domain/", 'r' => '', 't' => 'T', 'w' => 1200, 'k' => str_repeat($k, 16)],
+    $server($firefox, '203.0.113.9', ['HTTP_ORIGIN' => "https://$domain"]), $config);
+check('a website added through the API counts visits like any other', $hit('shop.example.org', 'q') === 'ok' && $hit('plain.example.org', 'r') === 'ok' && one($pdo, "SELECT COUNT(*) FROM visits WHERE site_id = $shop") == 1);
+ls_collect($pdo, ['n' => 'event', 'd' => 'shop.example.org', 'u' => 'https://shop.example.org/cart', 'e' => 'Bought'], $server($firefox, '203.0.113.9', ['HTTP_ORIGIN' => 'https://shop.example.org']), $config);
+ls_goal_add($pdo, $shop, 'Cart', 'path', '/cart');
+$last = ls_sites_last_hit($pdo, [$shop, $plain, $third, 999999]);
+check('the last time each website had activity, by site id, only for websites that have had some',
+    count($last) === 2 && $last[$shop] === (string) one($pdo, "SELECT MAX(last_at) FROM visits WHERE site_id = $shop") && isset($last[$plain]) && !isset($last[$third]));
+check('nothing to ask about, nothing to answer', ls_sites_last_hit($pdo, []) === [] && ls_sites_last_hit($pdo, [0, -1]) === []);
+
+ls_user_add($pdo, 'shopper', 'shoppers-password-1', 'viewer', '55', 'shop.example.org,example.com');
+ls_user_add($pdo, 'onlyshop', 'onlyshops-password-1', 'viewer', '56', 'shop.example.org');
+ls_user_add($pdo, 'everything', 'everythings-password-1', 'viewer', '57', '*');
+$pdo->exec("INSERT INTO api_keys (key_hash, label, sites) VALUES (UNHEX(SHA2('scoped', 256)), 'Scoped', 'shop.example.org,other.org')");
+[$st, $out] = $sapi(['op' => 'site.remove', 'domain' => 'Shop.Example.org']);
+check('site.remove deletes the website and every number it has', $st === 200 && $out === ['ok' => true, 'removed' => true] && one($pdo, "SELECT COUNT(*) FROM sites WHERE domain = 'shop.example.org'") == 0
+    && array_sum(array_map(fn ($t) => (int) one($pdo, "SELECT COUNT(*) FROM $t WHERE site_id = $shop"), ['visits', 'pageviews', 'events', 'goals'])) === 0);
+check('the other websites keep their numbers', one($pdo, "SELECT COUNT(*) FROM visits WHERE site_id = $plain") == 1);
+check('the domain leaves every viewer\'s and every key\'s list of websites, and "*" is left alone',
+    one($pdo, "SELECT sites FROM users WHERE email = 'shopper'") === 'example.com' && one($pdo, "SELECT sites FROM users WHERE email = 'onlyshop'") === ''
+    && one($pdo, "SELECT sites FROM users WHERE email = 'everything'") === '*' && one($pdo, "SELECT sites FROM api_keys WHERE label = 'Scoped'") === 'other.org');
+$sapi(['op' => 'site.add', 'domain' => 'shop.example.org']);
+$sees = fn (string $login) => array_column(ls_user_sites($pdo, ['role' => 'viewer', 'sites' => (string) one($pdo, "SELECT sites FROM users WHERE email = '$login'")]), 'domain');
+check('the same domain added again, for somebody else, is not seen by the people who saw the old one', !in_array('shop.example.org', $sees('shopper'), true) && $sees('onlyshop') === []);
+check('removing one that isn\'t there is fine', $sapi(['op' => 'site.remove', 'domain' => 'nothere.example.org']) === [200, ['ok' => true, 'removed' => false]]);
+
 echo "Upgrading an older database\n";
 foreach (['users', 'api_keys'] as $t) {
     $pdo->exec("DROP TABLE `$t`");
@@ -272,9 +321,9 @@ $pdo->exec("CREATE TABLE api_keys (id INT UNSIGNED NOT NULL AUTO_INCREMENT, key_
 $pdo->exec("INSERT INTO users (email, password_hash) VALUES ('old@admin.test', 'x')");
 $pdo->exec("INSERT INTO api_keys (key_hash, label, sites) VALUES (UNHEX(SHA2('k', 256)), 'Old key', '*')");
 $changes = ls_install_schema($pdo);
-check('missing columns are added and reported', count($changes) === 4 && in_array('users.role added', $changes, true) && in_array('api_keys.team added', $changes, true));
+check('missing columns are added and reported', count($changes) === 5 && in_array('users.role added', $changes, true) && in_array('api_keys.team added', $changes, true) && in_array('api_keys.manage_sites added', $changes, true));
 check('an existing login stays an admin who sees every website', one($pdo, "SELECT role FROM users WHERE email = 'old@admin.test'") === 'admin' && one($pdo, "SELECT sites FROM users WHERE email = 'old@admin.test'") === '*');
-check('an existing key gets no team access', one($pdo, "SELECT team FROM api_keys WHERE label = 'Old key'") == 0);
+check('an existing key gets no team access and can\'t manage websites', one($pdo, "SELECT team FROM api_keys WHERE label = 'Old key'") == 0 && one($pdo, "SELECT manage_sites FROM api_keys WHERE label = 'Old key'") == 0);
 check('running it again changes nothing', ls_install_schema($pdo) === []);
 
 echo "First run and team settings\n";

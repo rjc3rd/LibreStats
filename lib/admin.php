@@ -53,13 +53,34 @@ function ls_site_update(PDO $pdo, int $siteId, string $name, string $timezone): 
     return null;
 }
 
-// Deletes a site and every number it has. Nothing can bring it back.
+// Deletes a site and every number it has. Nothing can bring it back. The domain also leaves every viewer's and
+// every key's list of websites, so that if the same domain is added again later, for somebody else, the people who
+// could see the old one can't see the new one.
 function ls_site_remove(PDO $pdo, int $siteId): void
 {
+    $stmt = $pdo->prepare("SELECT domain FROM sites WHERE id = :s");
+    $stmt->execute(['s' => $siteId]);
+    $domain = $stmt->fetchColumn();
     foreach (['events', 'pageviews', 'visits', 'goals', 'monthly_totals', 'monthly_top'] as $table) {
         $pdo->prepare("DELETE FROM $table WHERE site_id = :s")->execute(['s' => $siteId]);
     }
     $pdo->prepare("DELETE FROM sites WHERE id = :s")->execute(['s' => $siteId]);
+    if (is_string($domain)) {
+        ls_scopes_forget($pdo, $domain);
+    }
+}
+
+// Takes one domain out of every list of websites a login or a key holds ('*' and empty lists are left alone).
+function ls_scopes_forget(PDO $pdo, string $domain): void
+{
+    foreach (['users', 'api_keys'] as $table) {
+        foreach ($pdo->query("SELECT id, sites FROM $table WHERE sites <> '*' AND sites <> ''")->fetchAll() as $row) {
+            $list = array_values(array_filter(array_map('trim', explode(',', strtolower((string) $row['sites']))), fn ($d) => $d !== ''));
+            if (in_array($domain, $list, true)) {
+                $pdo->prepare("UPDATE $table SET sites = :s WHERE id = :i")->execute(['s' => implode(',', array_values(array_diff($list, [$domain]))), 'i' => $row['id']]);
+            }
+        }
+    }
 }
 
 function ls_goals(PDO $pdo, int $siteId): array

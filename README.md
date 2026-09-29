@@ -71,6 +71,19 @@ An app that runs LibreStats for other people, a hosting panel for example, can m
 
 `sites` is required on purpose, so that leaving it out can never share everything: it is `"*"` for every website, or a list of domains such as `["example.com", "example.org"]`. A key can never share more than it can read itself. Answers are JSON: `{"ok": true, ...}` or `{"ok": false, "error": "..."}` with status 400 (bad request) or 409 (refused, with the reason). A team has `team_limit` places (5 unless set, `0` for no limit). Viewers log in on the dashboard like anyone else and see only their websites, with no Settings.
 
+## Websites for other people
+
+An app that runs LibreStats for other people can also add the websites they own, and take them away again, through the data API. Give the app a key that manages websites: `php bin/apikey.php add "My panel" '*' --manage-sites` (or `php bin/apikey.php manage-sites "My panel" on` for a key it already has). Such a key has to be able to read every website (`'*'`), because it adds websites it could not otherwise read. The app sends JSON to `api.php?sites` by POST, with `Authorization: Bearer <key>`.
+
+| `op` | Other fields | What it does |
+| --- | --- | --- |
+| `site.add` | `domain`, `timezone` (optional, `UTC` unless given) | Adds a website. Adding one that is already there changes nothing, so an app can simply make sure every website is here. Answers `{"ok": true, "created": true}` or `false`. |
+| `site.remove` | `domain` | Deletes the website and every number it has, for good. Answers `{"ok": true, "removed": true}` or `false` when it wasn't there. |
+
+The domain is tidied up (`https://www.Example.com/x` becomes `example.com`) and has to be a real domain name. When a website is removed it also leaves every viewer's and every key's list of websites, so if the same domain is added again later, for somebody else, the people who saw the old one can't see the new one. A mistake answers `{"ok": false, "error": "..."}` with status 400 (bad request), 403 (this key can't do that) or 405 (use POST).
+
+`api.php?report=sites` lists each website's `domain`, `name`, `timezone` and `last_hit`: the last time it had activity (UTC, `null` if it never has, or if none is left in the raw data that is kept). An app can use it to tell "counting" from "the script isn't on the page yet".
+
 ## Themes
 
 LibreStats ships with a clean default theme. Every color, font, and chart style lives in the theme, so you can make it match your own site without touching the code.
