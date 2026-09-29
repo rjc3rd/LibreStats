@@ -1,6 +1,7 @@
 <?php
 // Dashboard logins.
 //   php bin/user.php add ranzy                (a username or an email; asks for the password, not shown)
+//   php bin/user.php add sam --viewer         (someone who can only look at the numbers, not change anything)
 //   php bin/user.php password you@example.com
 //   php bin/user.php list
 //   php bin/user.php remove you@example.com
@@ -28,6 +29,7 @@ function ask_password(): string
 }
 
 $pdo = ls_db();
+$viewer = in_array('--viewer', $argv, true);
 [$cmd, $email] = [$argv[1] ?? '', strtolower(trim($argv[2] ?? ''))];
 switch ($cmd) {
     case 'add':
@@ -37,7 +39,7 @@ switch ($cmd) {
         }
         $password = ask_password();
         if ($cmd === 'add') {
-            echo ($problem = ls_user_add($pdo, $email, $password)) ? "$problem\n" : "Added $email.\n";
+            echo ($problem = ls_user_add($pdo, $email, $password, $viewer ? 'viewer' : 'admin')) ? "$problem\n" : "Added $email" . ($viewer ? ', who can only look' : '') . ".\n";
         } else {
             $hash = password_hash($password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("UPDATE users SET password_hash = :h WHERE email = :e");
@@ -46,8 +48,8 @@ switch ($cmd) {
         }
         break;
     case 'list':
-        foreach ($pdo->query("SELECT email, created_at FROM users ORDER BY email") as $u) {
-            echo str_pad($u['email'], 40), $u['created_at'], "\n";
+        foreach ($pdo->query("SELECT email, role, team, created_at FROM users ORDER BY email") as $u) {
+            echo str_pad($u['email'], 40), str_pad($u['role'] === 'viewer' ? 'viewer' . ($u['team'] !== null ? ' (team ' . $u['team'] . ')' : '') : 'admin', 22), $u['created_at'], "\n";
         }
         break;
     case 'remove':
@@ -56,5 +58,5 @@ switch ($cmd) {
         echo $stmt->rowCount() ? "Removed $email.\n" : "No user $email.\n";
         break;
     default:
-        echo "Usage: php bin/user.php add|password|remove you@example.com | list\n";
+        echo "Usage: php bin/user.php add|password|remove you@example.com [--viewer] | list\n";
 }

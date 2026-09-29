@@ -82,11 +82,13 @@ ls_render('bar', get_defined_vars());
         <div><button class="ls-btn ls-btn-primary" type="submit">Change password</button></div>
       </form>
       <h2 class="ls-subhead">People who can log in</h2>
-      <ul class="ls-list ls-sites"><?php foreach ($users as $u): ?><li><?= h($u['email']) ?><?= $u['email'] === $user['email'] ? ' <small>you</small>' : '' ?></li><?php endforeach; ?></ul>
+      <ul class="ls-list ls-sites"><?php foreach ($users as $u): ?><li><?= h($u['email']) ?><?= $u['email'] === $user['email'] ? ' <small>you</small>' : '' ?><?= $u['role'] === 'viewer' ? ' <small>can only look</small>' : '' ?></li><?php endforeach; ?></ul>
       <form class="ls-form ls-form-tight" method="post" action="<?= $action ?>">
         <?= $hidden('user_add') ?>
         <label>Their username or email<input class="ls-input" type="text" name="email" autocapitalize="none" spellcheck="false" autocomplete="off" required></label>
         <label>A password for them (10 characters or more)<input class="ls-input" type="password" name="password" autocomplete="new-password" minlength="10" required></label>
+        <label for="ls-role">What they can do</label>
+        <select class="ls-select" name="role" id="ls-role"><option value="admin">Change settings and look</option><option value="viewer">Only look at the numbers</option></select>
         <div><button class="ls-btn" type="submit">Add login</button></div>
       </form>
     </section>

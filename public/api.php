@@ -7,7 +7,10 @@
 //     api.php?report=top&site=example.com&dim=page&limit=100&range=… (one full list)
 //     api.php?report=live&site=example.com
 //   range: today, 7d, 30d, 90d, 12m, or custom with from=YYYY-MM-DD&to=YYYY-MM-DD.
-// A key only ever sees the websites it was made for.
+//   A key made with --team can also manage viewers (people who can only look) for the teams the app runs:
+//     POST api.php?team   with JSON {"op": "team.list|team.add|team.password|team.remove|team.sites", "acct": "…", …}
+//     (lib/team.php, ls_team_api(), and the README describe each operation)
+// A key only ever sees the websites it was made for, and can only share those with a team.
 
 declare(strict_types=1);
 
@@ -15,6 +18,8 @@ require __DIR__ . '/../lib/bootstrap.php';
 require __DIR__ . '/../lib/auth.php';
 require __DIR__ . '/../lib/report.php';
 require __DIR__ . '/../lib/collect.php';
+require __DIR__ . '/../lib/admin.php';
+require __DIR__ . '/../lib/team.php';
 
 header('Content-Type: application/json');
 header('Cache-Control: no-store');
@@ -29,22 +34,42 @@ function ls_api_out(int $status, array $data): never
 
 $pdo = ls_db();
 
-// Who's asking: a key (apps) or a logged-in dashboard session. Returns the allowed domains, or null for all.
+// Who's asking: a key (apps) or a logged-in dashboard session. $allowed is the domains they may see, or null for all.
 $allowed = null;
+$key = null;
 $auth = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
 if (preg_match('~^Bearer\s+(ls_[a-f0-9]{48})$~', $auth, $m)) {
-    $stmt = $pdo->prepare("SELECT id, sites FROM api_keys WHERE key_hash = :h");
+    $stmt = $pdo->prepare("SELECT id, sites, team FROM api_keys WHERE key_hash = :h");
     $stmt->execute(['h' => hash('sha256', $m[1], true)]);
     $key = $stmt->fetch();
     if (!$key) {
         ls_api_out(401, ['error' => 'unknown key']);
     }
     $pdo->prepare("UPDATE api_keys SET last_used = :t WHERE id = :i")->execute(['t' => ls_now(), 'i' => $key['id']]);
-    $allowed = $key['sites'] === '*' ? null : explode(',', $key['sites']);
-} elseif (ls_user()) {
+    $allowed = ls_scope_list((string) $key['sites']);
+} elseif ($user = ls_user()) {
     session_write_close();
+    $allowed = ls_is_admin($user) ? null : ls_scope_list((string) $user['sites']);
 } else {
     ls_api_out(403, ['error' => 'not logged in']);
+}
+
+// Managing teams of viewers: only with a key that has team access (never a login session, which
+// keeps this out of reach of a forged request from a browser), and only by POST.
+if (isset($_GET['team'])) {
+    if (!$key || !$key['team']) {
+        ls_api_out(403, ['ok' => false, 'error' => 'this key can’t manage teams']);
+    }
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
+        ls_api_out(405, ['ok' => false, 'error' => 'use POST']);
+    }
+    $body = (string) file_get_contents('php://input', false, null, 0, 16385);
+    $input = strlen($body) <= 16384 ? json_decode($body, true) : null;
+    if (!is_array($input)) {
+        ls_api_out(400, ['ok' => false, 'error' => 'send a JSON object, up to 16 KB']);
+    }
+    [$status, $answer] = ls_team_api($pdo, $key, $input, ls_team_limit());
+    ls_api_out($status, $answer);
 }
 
 $sites = array_values(array_filter(

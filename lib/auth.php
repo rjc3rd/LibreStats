@@ -24,13 +24,26 @@ function ls_session_start(): void
     $_SESSION['ls_csrf'] ??= bin2hex(random_bytes(16));
 }
 
-function ls_user(): ?array
+// The logged-in person, or null. They are looked up again on every request, so someone who has been
+// removed is out at once and a change to what a viewer may see applies straight away. $pdo is for the tests.
+function ls_user(?PDO $pdo = null): ?array
 {
     if (!ls_dashboard_enabled()) {
         return null;  // switched off: no sessions and no logins, not even old cookies
     }
     ls_session_start();
-    return $_SESSION['ls_user'] ?? null;
+    $id = (int) ($_SESSION['ls_user']['id'] ?? 0);
+    if ($id === 0) {
+        return null;
+    }
+    $stmt = ($pdo ?? ls_db())->prepare("SELECT id, email, role, team, sites FROM users WHERE id = :i");
+    $stmt->execute(['i' => $id]);
+    $user = $stmt->fetch();
+    if (!$user) {
+        $_SESSION = ['ls_seen' => time(), 'ls_csrf' => bin2hex(random_bytes(16))];
+        return null;
+    }
+    return $_SESSION['ls_user'] = ['id' => (int) $user['id'], 'email' => $user['email'], 'role' => $user['role'], 'team' => $user['team'], 'sites' => $user['sites']];
 }
 
 function ls_csrf(): string
@@ -62,11 +75,17 @@ function ls_login(PDO $pdo, string $email, string $password, string $ip): ?strin
         $pdo->prepare("INSERT INTO login_failures (who, at) VALUES (:w, :t)")->execute(['w' => $who, 't' => ls_now()]);
         return 'That username and password don’t match.';
     }
+    ls_login_as((int) $user['id']);
+    return null;
+}
+
+// Starts a login session for somebody whose password (or invitation) has just been checked.
+function ls_login_as(int $userId): void
+{
     ls_session_start();
     session_regenerate_id(true);
-    $_SESSION['ls_user'] = ['id' => (int) $user['id'], 'email' => $user['email']];
+    $_SESSION['ls_user'] = ['id' => $userId];
     $_SESSION['ls_csrf'] = bin2hex(random_bytes(16));
-    return null;
 }
 
 function ls_logout(): void

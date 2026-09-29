@@ -127,11 +127,17 @@ CREATE TABLE IF NOT EXISTS geo_country (
   PRIMARY KEY (ip_start)
 ) ENGINE=InnoDB;
 
--- Dashboard logins (the default dashboard; apps embedding LibreStats can use their own).
+-- Dashboard logins (the default dashboard, apps embedding LibreStats can use their own). An 'admin' can
+-- change everything. A 'viewer' can only look at the numbers, of every website ('*') or only of the domains
+-- listed in `sites` (comma-separated). `team` is the id an app that runs LibreStats gives to the group a
+-- viewer belongs to, so that app can manage its own people and nobody else's (see lib/team.php).
 CREATE TABLE IF NOT EXISTS users (
   id            INT UNSIGNED NOT NULL AUTO_INCREMENT,
   email         VARCHAR(254) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
+  role          VARCHAR(10) NOT NULL DEFAULT 'admin',
+  team          VARCHAR(64) NULL,
+  sites         VARCHAR(2000) NOT NULL DEFAULT '*',
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_email (email)
@@ -146,13 +152,15 @@ CREATE TABLE IF NOT EXISTS login_failures (
 ) ENGINE=InnoDB;
 
 -- Keys for the data API (public/api.php), for apps that show LibreStats numbers in their own pages
--- (a hosting panel, say). Only a hash of the key is stored; `sites` limits which websites it can
--- read (comma-separated domains), or '*' for all.
+-- (a hosting panel, say). Only a hash of the key is stored. `sites` limits which websites it can
+-- read (comma-separated domains), or '*' for all. `team` is 1 when the app may also add and remove
+-- viewers for the teams it manages (never for more websites than the key itself can read).
 CREATE TABLE IF NOT EXISTS api_keys (
   id          INT UNSIGNED NOT NULL AUTO_INCREMENT,
   key_hash    BINARY(32) NOT NULL,
   label       VARCHAR(100) NOT NULL,
   sites       TEXT NOT NULL,
+  team        TINYINT(1) NOT NULL DEFAULT 0,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_used   DATETIME NULL,
   PRIMARY KEY (id),

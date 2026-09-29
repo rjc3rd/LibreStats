@@ -12,6 +12,11 @@ function ls_clean_domain(string $domain): string
     return str_starts_with($domain, 'www.') ? substr($domain, 4) : $domain;
 }
 
+function ls_valid_domain(string $domain): bool
+{
+    return (bool) preg_match('~^(?=.{1,253}$)([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$~', $domain);
+}
+
 function ls_valid_timezone(string $tz): bool
 {
     return in_array($tz, DateTimeZone::listIdentifiers(), true);
@@ -20,7 +25,7 @@ function ls_valid_timezone(string $tz): bool
 function ls_site_add(PDO $pdo, string $domain, string $timezone): ?string
 {
     $domain = ls_clean_domain($domain);
-    if (!preg_match('~^(?=.{1,253}$)([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$~', $domain)) {
+    if (!ls_valid_domain($domain)) {
         return 'Please enter a domain like example.com.';
     }
     if (!ls_valid_timezone($timezone)) {
@@ -115,7 +120,16 @@ function ls_valid_login(string $login): bool
     return (bool) filter_var($login, FILTER_VALIDATE_EMAIL) || (bool) preg_match('~^[a-z0-9._-]{3,64}$~', $login);
 }
 
-function ls_user_add(PDO $pdo, string $email, string $password): ?string
+// Adds a login without any checks. An 'admin' can change everything, a 'viewer' can only look (at every
+// website, or at the domains in $sites). Returns the new login's id.
+function ls_user_create(PDO $pdo, string $login, string $password, string $role = 'admin', ?string $team = null, string $sites = '*'): int
+{
+    $pdo->prepare("INSERT INTO users (email, password_hash, role, team, sites) VALUES (:e, :h, :r, :t, :s)")
+        ->execute(['e' => strtolower(trim($login)), 'h' => password_hash($password, PASSWORD_DEFAULT), 'r' => $role, 't' => $team, 's' => $sites]);
+    return (int) $pdo->lastInsertId();
+}
+
+function ls_user_add(PDO $pdo, string $email, string $password, string $role = 'admin', ?string $team = null, string $sites = '*'): ?string
 {
     $email = strtolower(trim($email));
     if (!ls_valid_login($email)) {
@@ -124,12 +138,15 @@ function ls_user_add(PDO $pdo, string $email, string $password): ?string
     if (strlen($password) < 10) {
         return 'Please use a password of 10 characters or more.';
     }
+    if (!in_array($role, ['admin', 'viewer'], true)) {
+        return 'Choose whether they can change settings or only look at the numbers.';
+    }
     $stmt = $pdo->prepare("SELECT COUNT(*) FROM users WHERE email = :e");
     $stmt->execute(['e' => $email]);
     if ($stmt->fetchColumn()) {
-        return "$email can already log in.";
+        return 'That username is already taken.';
     }
-    $pdo->prepare("INSERT INTO users (email, password_hash) VALUES (:e, :h)")->execute(['e' => $email, 'h' => password_hash($password, PASSWORD_DEFAULT)]);
+    ls_user_create($pdo, $email, $password, $role, $team, $sites);
     return null;
 }
 

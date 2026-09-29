@@ -15,6 +15,8 @@ require __DIR__ . '/../lib/maintain.php';
 require __DIR__ . '/../lib/report.php';
 require __DIR__ . '/../lib/admin.php';
 require __DIR__ . '/../lib/auth.php';
+require __DIR__ . '/../lib/install.php';
+require __DIR__ . '/../lib/team.php';
 
 $config = ls_config();
 $db = $config['db'];
@@ -25,10 +27,7 @@ $pdo->exec("SET time_zone = '+00:00'");
 foreach ($pdo->query("SHOW TABLES")->fetchAll(PDO::FETCH_COLUMN) as $t) {
     $pdo->exec("DROP TABLE `$t`");
 }
-$schema = preg_replace('~^\s*--.*$~m', '', (string) file_get_contents(LS_ROOT . '/sql/schema.sql'));
-foreach (array_filter(array_map('trim', explode(';', $schema))) as $s) {
-    $pdo->exec($s);
-}
+ls_install_schema($pdo);
 $pdo->exec("INSERT INTO sites (domain, name, timezone) VALUES ('example.com', 'Example', 'America/Chicago'), ('other.org', 'Other', 'UTC')");
 // 203.0.113.0/24 is a documentation range; pretend it's in the US.
 $pdo->prepare("INSERT INTO geo_country VALUES (:a, :b, 'US')")->execute(['a' => ls_ip_bin('203.0.113.0'), 'b' => ls_ip_bin('203.0.113.255')]);
@@ -182,6 +181,105 @@ include LS_ROOT . '/themes/default/templates/closed.php';
 $closedDefault = (string) ob_get_clean();
 check('the default closed page says the dashboard is turned off', str_contains($closedDefault, 'turned off'));
 check('no closed page has a form or a password field', !str_contains($closedActive . $closedDefault, '<form') && !str_contains($closedActive . $closedDefault, 'password'));
+
+echo "\nTeams of viewers\n";
+require_once __DIR__ . '/../lib/theme.php';
+$pdo->exec("INSERT INTO sites (domain, name, timezone) VALUES ('third.net', 'Third', 'UTC')");
+$key = ['id' => 1, 'sites' => '*', 'team' => 1];
+$api = fn (array $input, array $k = null, ?int $limit = 5) => ls_team_api($pdo, $k ?? $key, $input, $limit);
+check('a viewer is made by the person who leads the team, with their own username and password',
+    ls_team_add($pdo, '7', 'example.com,other.org', 'Sam', 'sams-password-1') === null
+    && one($pdo, "SELECT role FROM users WHERE email = 'sam'") === 'viewer' && one($pdo, "SELECT team FROM users WHERE email = 'sam'") === '7');
+check('the username is kept in lower case and can log in', ls_login($pdo, 'SAM', 'sams-password-1', '203.0.113.60') === null && ls_user($pdo)['email'] === 'sam');
+check('the password is only kept as a hash', !str_contains(json_encode($pdo->query("SELECT * FROM users")->fetchAll()), 'sams-password-1'));
+check('a viewer sees only the websites shared with them', implode(',', array_column(ls_user_sites($pdo, ls_user($pdo)), 'domain')) === 'example.com,other.org');
+check('an admin sees every website', count(ls_user_sites($pdo, ['role' => 'admin'])) === 3);
+check('a login without a role is an admin (older sessions)', ls_is_admin(['email' => 'x']) && !ls_is_admin(['role' => 'viewer']));
+check('taken usernames, bad usernames and short passwords are refused',
+    ls_team_add($pdo, '7', '*', 'sam', 'another-password-1') !== null && ls_team_add($pdo, '7', '*', 'bad name!', 'another-password-1') !== null
+    && ls_team_add($pdo, '7', '*', 'tina', 'short') !== null);
+check('usernames are unique across teams', ls_team_add($pdo, '8', '*', 'sam', 'another-password-1') !== null);
+check('a team has a limit on its places', ls_team_add($pdo, '7', '*', 'tina', 'tinas-password-1', 2) === null && str_contains((string) ls_team_add($pdo, '7', '*', 'uma', 'umas-password-1', 2), 'no free places'));
+check('no limit when the limit is null', ls_team_add($pdo, '7', '*', 'vic', 'vics-password-1', null) === null);
+check('one team\'s places don\'t count against another', ls_team_add($pdo, '8', '*', 'wes', 'wess-password-1', 2) === null);
+$sam = (int) one($pdo, "SELECT id FROM users WHERE email = 'sam'");
+$wes = (int) one($pdo, "SELECT id FROM users WHERE email = 'wes'");
+$list = ls_team_list($pdo, '7');
+check('a team lists its own people only', array_column($list['members'], 'email') === ['sam', 'tina', 'vic'] && $list['used'] === 3);
+check('one team can\'t set another team\'s password', ls_team_password($pdo, '7', $wes, 'hijacked-password-1') !== null && password_verify('wess-password-1', (string) one($pdo, "SELECT password_hash FROM users WHERE id = $wes")));
+check('the leader sets a new password, which then works and the old one stops', ls_team_password($pdo, '7', $sam, 'sams-new-password-1') === null
+    && ls_login($pdo, 'sam', 'sams-password-1', '203.0.113.61') !== null && ls_login($pdo, 'sam', 'sams-new-password-1', '203.0.113.62') === null);
+check('a new password has to be long enough', ls_team_password($pdo, '7', $sam, 'short') !== null);
+check('an admin login can\'t be reached through a team', ls_team_password($pdo, '', (int) one($pdo, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"), 'hijacked-password-1') !== null);
+ls_team_set_sites($pdo, '7', 'third.net');
+check('changing a team\'s websites changes what its people see, at once', implode(',', array_column(ls_user_sites($pdo, ls_user($pdo)), 'domain')) === 'third.net');
+check('and only for that team', one($pdo, "SELECT sites FROM users WHERE email = 'wes'") === '*');
+$_SESSION['ls_user'] = ['id' => $wes];
+check('a session is checked against the database every time', ls_user($pdo)['email'] === 'wes' && ls_team_remove($pdo, '8', $wes) === null && ls_user($pdo) === null);
+check('after removal the session is empty but still has a form token', is_string($_SESSION['ls_csrf'] ?? null) && $_SESSION['ls_csrf'] !== '');
+check('a removed person\'s login is gone', one($pdo, "SELECT COUNT(*) FROM users WHERE email = 'wes'") == 0 && ls_login($pdo, 'wes', 'wess-password-1', '203.0.113.63') !== null);
+check('a team can\'t remove somebody from another team or an admin', ls_team_remove($pdo, '8', $sam) !== null && ls_team_remove($pdo, '7', (int) one($pdo, "SELECT id FROM users WHERE role = 'admin' LIMIT 1")) !== null);
+
+echo "Which websites a scope allows\n";
+check('* means every website', ls_scope_list('*') === null && ls_scope_allows('*', 'anything.example'));
+check('a list is comma-separated domains, in lower case', ls_scope_list('Example.com, other.org,') === ['example.com', 'other.org']);
+check('an empty scope allows nothing', ls_scope_list('') === [] && !ls_scope_allows('', 'example.com'));
+check('a key can only share what it can read', ls_scope_narrow('example.com,other.org', ['other.org', 'third.net', 'EXAMPLE.com']) === 'other.org,example.com');
+check('a key that reads everything can share everything, or a list', ls_scope_narrow('*', '*') === '*' && ls_scope_narrow('*', ['https://www.Third.net/x']) === 'third.net');
+check('"*" from a limited key is just what the key reads', ls_scope_narrow('example.com', '*') === 'example.com');
+check('junk in a list is dropped, and "*" inside a list is not everything', ls_scope_narrow('*', ['not a domain', 5, '*', 'good.org']) === 'good.org');
+check('a list that is too long for a scope is refused', ls_scope_narrow('*', array_map(fn ($i) => "site$i-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example", range(1, 60))) === null);
+
+echo "The team API\n";
+[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'zed', 'password' => 'zeds-password-1', 'sites' => ['example.com']]);
+check('team.add makes a viewer', $st === 200 && $out['ok'] && one($pdo, "SELECT team FROM users WHERE email = 'zed'") === '9' && one($pdo, "SELECT sites FROM users WHERE email = 'zed'") === 'example.com');
+[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'yan', 'password' => 'yans-password-1']);
+check('the websites have to be named, so leaving them out never shares everything', $st === 400 && !$out['ok'] && one($pdo, "SELECT COUNT(*) FROM users WHERE email = 'yan'") == 0);
+[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'yan', 'password' => 'yans-password-1', 'sites' => 'example.com']);
+check('a string other than * isn\'t a list of websites', $st === 400 && one($pdo, "SELECT COUNT(*) FROM users WHERE email = 'yan'") == 0);
+[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'yan', 'password' => 'yans-password-1', 'sites' => ['third.net']], ['id' => 2, 'sites' => 'example.com', 'team' => 1]);
+check('a key limited to some websites can\'t share others', $st === 200 && one($pdo, "SELECT sites FROM users WHERE email = 'yan'") === '');
+[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'zed', 'password' => 'zeds-password-1', 'sites' => '*']);
+check('a taken username answers 409 with a reason', $st === 409 && !$out['ok'] && str_contains($out['error'], 'already taken'));
+[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'xia', 'password' => 'xias-password-1', 'sites' => '*'], null, 2);
+check('a full team answers 409', $st === 409 && str_contains($out['error'], 'no free places'));
+[$st, $out] = $api(['op' => 'team.list', 'acct' => '9']);
+check('team.list shows the team, its places and each person\'s websites and join date',
+    $st === 200 && count($out['members']) === 2 && $out['members'][0]['username'] === 'zed' && $out['members'][0]['sites'] === ['example.com']
+    && $out['seats'] === ['used' => 2, 'limit' => 5] && preg_match('~^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$~', $out['members'][0]['joined']) === 1);
+check('team.list never shows a password or a hash', !str_contains(json_encode($out), 'password') && !str_contains(json_encode($out), '$2y$'));
+$zed = (int) $out['members'][0]['id'];
+[$st] = $api(['op' => 'team.password', 'acct' => '9', 'member' => $zed, 'password' => 'zeds-new-password-1']);
+check('team.password sets a new password', $st === 200 && password_verify('zeds-new-password-1', (string) one($pdo, "SELECT password_hash FROM users WHERE id = $zed")));
+[$st] = $api(['op' => 'team.password', 'acct' => '10', 'member' => $zed, 'password' => 'hijacked-password-1']);
+check('team.password only reaches the named team', $st === 409 && password_verify('zeds-new-password-1', (string) one($pdo, "SELECT password_hash FROM users WHERE id = $zed")));
+[$st] = $api(['op' => 'team.remove', 'acct' => '10', 'member' => $zed]);
+check('team.remove only reaches the named team', $st === 409 && one($pdo, "SELECT COUNT(*) FROM users WHERE id = $zed") == 1);
+[$st] = $api(['op' => 'team.sites', 'acct' => '9', 'sites' => ['third.net']]);
+check('team.sites changes the team\'s websites', $st === 200 && one($pdo, "SELECT sites FROM users WHERE id = $zed") === 'third.net' && one($pdo, "SELECT sites FROM users WHERE email = 'sam'") === 'third.net');
+[$st] = $api(['op' => 'team.remove', 'acct' => '9', 'member' => $zed]);
+check('team.remove deletes the login', $st === 200 && one($pdo, "SELECT COUNT(*) FROM users WHERE id = $zed") == 0);
+check('a team id has to be short and plain, and every request names one', $api(['op' => 'team.list'])[0] === 400 && $api(['op' => 'team.list', 'acct' => 'a b'])[0] === 400
+    && $api(['op' => 'team.list', 'acct' => str_repeat('a', 65)])[0] === 400 && $api(['op' => 'team.list', 'acct' => ['7']])[0] === 400);
+check('an unknown operation is refused', $api(['op' => 'team.destroy', 'acct' => '9'])[0] === 400);
+
+echo "Upgrading an older database\n";
+foreach (['users', 'api_keys'] as $t) {
+    $pdo->exec("DROP TABLE `$t`");
+}
+$pdo->exec("CREATE TABLE users (id INT UNSIGNED NOT NULL AUTO_INCREMENT, email VARCHAR(254) NOT NULL, password_hash VARCHAR(255) NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (id), UNIQUE KEY uq_users_email (email)) ENGINE=InnoDB");
+$pdo->exec("CREATE TABLE api_keys (id INT UNSIGNED NOT NULL AUTO_INCREMENT, key_hash BINARY(32) NOT NULL, label VARCHAR(100) NOT NULL, sites TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, last_used DATETIME NULL, PRIMARY KEY (id), UNIQUE KEY uq_api_keys_hash (key_hash)) ENGINE=InnoDB");
+$pdo->exec("INSERT INTO users (email, password_hash) VALUES ('old@admin.test', 'x')");
+$pdo->exec("INSERT INTO api_keys (key_hash, label, sites) VALUES (UNHEX(SHA2('k', 256)), 'Old key', '*')");
+$changes = ls_install_schema($pdo);
+check('missing columns are added and reported', count($changes) === 4 && in_array('users.role added', $changes, true) && in_array('api_keys.team added', $changes, true));
+check('an existing login stays an admin who sees every website', one($pdo, "SELECT role FROM users WHERE email = 'old@admin.test'") === 'admin' && one($pdo, "SELECT sites FROM users WHERE email = 'old@admin.test'") === '*');
+check('an existing key gets no team access', one($pdo, "SELECT team FROM api_keys WHERE label = 'Old key'") == 0);
+check('running it again changes nothing', ls_install_schema($pdo) === []);
+
+echo "First run and team settings\n";
+check('the first-run page is on unless the settings say otherwise', ls_first_run_enabled([]) === true && ls_first_run_enabled(['first_run' => false]) === false && ls_first_run_enabled(['first_run' => 'off']) === false);
+check('a team has 5 places unless the settings say otherwise, and 0 means no limit', ls_team_limit([]) === 5 && ls_team_limit(['team_limit' => 8]) === 8 && ls_team_limit(['team_limit' => 0]) === null);
 
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

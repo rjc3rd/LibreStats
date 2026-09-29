@@ -24,6 +24,14 @@ return [
     // there is no login or setup page. Tracking and the data API keep working.
     'dashboard' => true,
 
+    // The page where the first visitor creates the first login. false turns it off, for a server whose
+    // logins only come from bin/user.php or from an app that runs LibreStats.
+    'first_run' => true,
+
+    // How many viewers (people who can only look) one team may have. Teams are managed by an app through
+    // the data API with a key that has team access (bin/apikey.php). 0: no limit.
+    'team_limit' => 5,
+
     // Dashboard look: a folder name under themes/ (or under one of theme_paths).
     'theme' => 'default',
     'theme_paths' => [],

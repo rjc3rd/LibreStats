@@ -10,6 +10,7 @@ require __DIR__ . '/../lib/charts.php';
 require __DIR__ . '/../lib/theme.php';
 require __DIR__ . '/../lib/collect.php';
 require __DIR__ . '/../lib/admin.php';
+require __DIR__ . '/../lib/team.php';
 
 header("Content-Security-Policy: default-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'");
 header('X-Content-Type-Options: nosniff');
@@ -28,9 +29,9 @@ $pdo = ls_db();
 $error = null;
 $action = $_POST['action'] ?? '';
 
-// First run: no logins yet, so the first visitor creates the owner's login here.
+// First run: no logins yet, so the first visitor creates the owner's login here (unless 'first_run' => false).
 $noUsers = (int) $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn() === 0;
-if ($noUsers) {
+if ($noUsers && ls_first_run_enabled()) {
     if ($action === 'setup' && ls_csrf_ok()) {
         $email = strtolower(trim((string) ($_POST['email'] ?? '')));
         $password = (string) ($_POST['password'] ?? '');
@@ -41,7 +42,7 @@ if ($noUsers) {
         } elseif ($password !== (string) ($_POST['password2'] ?? '')) {
             $error = 'The two passwords don’t match.';
         } else {
-            $pdo->prepare("INSERT INTO users (email, password_hash) VALUES (:e, :h)")->execute(['e' => $email, 'h' => password_hash($password, PASSWORD_DEFAULT)]);
+            ls_user_create($pdo, $email, $password);
             ls_login($pdo, $email, $password, ls_client_ip($_SERVER, ls_config()['trusted_proxies'] ?? []));
             header('Location: ./', true, 303);
             exit;
@@ -69,12 +70,15 @@ if (!$user) {
     exit;
 }
 
-// Logged in: pick the site and range.
+// Logged in: pick the site and range. A viewer (somebody who can only look) sees only the websites shared
+// with them, and their Settings tab is just their own login.
 const LS_VIEWS = ['overview' => 'Overview', 'pages' => 'Pages', 'sources' => 'Sources', 'locations' => 'Locations',
     'devices' => 'Devices', 'events' => 'Events & goals', 'settings' => 'Settings'];
 
-$sites = $pdo->query("SELECT id, domain, name, timezone FROM sites ORDER BY domain")->fetchAll();
-if (!$sites && $action === 'site_add' && ls_csrf_ok()) {
+$isAdmin = ls_is_admin($user);
+$views = $isAdmin ? LS_VIEWS : array_merge(LS_VIEWS, ['settings' => 'Account']);
+$sites = ls_user_sites($pdo, $user);
+if (!$sites && $isAdmin && $action === 'site_add' && ls_csrf_ok()) {
     $error = ls_site_add($pdo, (string) ($_POST['domain'] ?? ''), (string) ($_POST['timezone'] ?? 'UTC'));
     if ($error === null) {
         header('Location: ./?site=' . rawurlencode(ls_clean_domain((string) $_POST['domain'])), true, 303);
@@ -82,7 +86,7 @@ if (!$sites && $action === 'site_add' && ls_csrf_ok()) {
     }
 }
 if (!$sites) {
-    ls_render('no-sites', ['user' => $user, 'csrf' => ls_csrf(), 'error' => $error]);
+    ls_render('no-sites', ['user' => $user, 'csrf' => ls_csrf(), 'error' => $error, 'viewer' => !$isAdmin]);
     exit;
 }
 $site = $sites[0];
@@ -98,6 +102,8 @@ $view = isset(LS_VIEWS[$_GET['view'] ?? '']) ? $_GET['view'] : 'overview';
 if ($action !== '' && $action !== 'login' && $action !== 'logout') {
     if (!ls_csrf_ok()) {
         $_SESSION['ls_flash'] = ['error', 'That form had expired. Please try again.'];
+    } elseif (!$isAdmin && $action !== 'password') {
+        $_SESSION['ls_flash'] = ['error', 'You can look at the numbers, but changing settings is for whoever runs this LibreStats.'];
     } else {
         $back = ['site' => $site['domain'], 'view' => 'settings'];
         $problem = null;
@@ -138,7 +144,7 @@ if ($action !== '' && $action !== 'login' && $action !== 'logout') {
                 $done = 'Password changed.';
                 break;
             case 'user_add':
-                $problem = ls_user_add($pdo, (string) ($_POST['email'] ?? ''), (string) ($_POST['password'] ?? ''));
+                $problem = ls_user_add($pdo, (string) ($_POST['email'] ?? ''), (string) ($_POST['password'] ?? ''), (string) ($_POST['role'] ?? 'admin'));
                 $done = 'Login added. Give them the email and password you chose.';
                 break;
             default:
@@ -166,12 +172,16 @@ if (isset($_GET['export'])) {
 }
 
 $common = ['user' => $user, 'csrf' => ls_csrf(), 'sites' => $sites, 'site' => $site, 'range' => $range, 'label' => $label,
-    'from' => $from, 'to' => $to, 'view' => $view, 'views' => LS_VIEWS, 'flash' => $flash, 'live' => ls_report_live($pdo, $siteId),
+    'from' => $from, 'to' => $to, 'view' => $view, 'views' => $views, 'flash' => $flash, 'live' => ls_report_live($pdo, $siteId),
     'scriptUrl' => (isset($_SERVER['HTTP_HOST']) ? (!empty($_SERVER['HTTPS']) ? 'https://' : 'http://') . $_SERVER['HTTP_HOST'] . rtrim(dirname($_SERVER['SCRIPT_NAME']), '/') : '') . '/s.js'];
 
 if ($view === 'settings') {
+    if (!$isAdmin) {
+        ls_render('account', $common);
+        exit;
+    }
     ls_render('settings', $common + ['goals' => ls_goals($pdo, $siteId), 'timezones' => DateTimeZone::listIdentifiers(),
-        'users' => $pdo->query("SELECT email, created_at FROM users ORDER BY email")->fetchAll()]);
+        'users' => $pdo->query("SELECT email, role, team, created_at FROM users ORDER BY email")->fetchAll()]);
     exit;
 }
 if ($view !== 'overview') {
