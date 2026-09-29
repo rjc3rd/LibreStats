@@ -65,6 +65,6 @@ Country data: [IP Geolocation by DB-IP](https://db-ip.com), licensed under CC BY
 
 ## License
 
-Copyright (C) 2026 Ranzy Campbell.
+Copyright (C) 2026 RJC3rd.
 
 [GNU Affero General Public License v3.0](LICENSE). You're free to use, study, change, and share LibreStats. If you share it, or run a changed version for other people over a network, you must keep it under the same license and share your source too, so it stays free for everyone.
