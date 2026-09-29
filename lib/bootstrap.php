@@ -18,6 +18,14 @@ function ls_config(): array
     return $config;
 }
 
+// Whether the built-in dashboard (its pages, logins and first-run setup) is on. 'dashboard' => false
+// in config.php turns it off; tracking and the data API keep working. $config is for the tests.
+function ls_dashboard_enabled(?array $config = null): bool
+{
+    $value = ($config ?? ls_config())['dashboard'] ?? true;
+    return filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
+}
+
 function ls_db(): PDO
 {
     static $pdo = null;

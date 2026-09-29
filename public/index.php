@@ -16,6 +16,14 @@ header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 header('X-Robots-Tag: noindex');
 
+// Switched off with 'dashboard' => false in config.php: no login and no setup page here. Tracking
+// and the data API keep working. (404: there is nothing to log in to.)
+if (!ls_dashboard_enabled()) {
+    http_response_code(404);
+    ls_render('closed');
+    exit;
+}
+
 $pdo = ls_db();
 $error = null;
 $action = $_POST['action'] ?? '';

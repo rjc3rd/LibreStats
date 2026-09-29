@@ -20,6 +20,10 @@ return [
     // for the daily hash and the country lookup, never stored) is read from X-Forwarded-For.
     'trusted_proxies' => [],
 
+    // The built-in dashboard and its logins. false turns them off: visitors see a short notice, and
+    // there is no login or setup page. Tracking and the data API keep working.
+    'dashboard' => true,
+
     // Dashboard look: a folder name under themes/ (or under one of theme_paths).
     'theme' => 'default',
     'theme_paths' => [],

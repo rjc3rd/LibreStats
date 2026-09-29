@@ -26,6 +26,9 @@ function ls_session_start(): void
 
 function ls_user(): ?array
 {
+    if (!ls_dashboard_enabled()) {
+        return null;  // switched off: no sessions and no logins, not even old cookies
+    }
     ls_session_start();
     return $_SESSION['ls_user'] ?? null;
 }

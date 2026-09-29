@@ -1,6 +1,6 @@
 <?php
 // JSON data for dashboards.
-//   Logged-in dashboard users:  api.php?live&site=example.com   (the live counter)
+//   Logged-in dashboard users:  api.php?live&site=example.com   (the live counter; not when 'dashboard' => false)
 //   Other apps, with a key made by bin/apikey.php, sent as "Authorization: Bearer <key>":
 //     api.php?report=sites
 //     api.php?report=overview&site=example.com&range=30d            (everything on the Overview)

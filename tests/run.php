@@ -167,5 +167,21 @@ check('Android tablet', ls_parse_ua('Mozilla/5.0 (Linux; Android 14; SM-X710) Ap
 check('proxy header ignored unless the proxy is trusted', ls_client_ip(['REMOTE_ADDR' => '198.51.100.1', 'HTTP_X_FORWARDED_FOR' => '203.0.113.5'], []) === '198.51.100.1'
     && ls_client_ip(['REMOTE_ADDR' => '198.51.100.1', 'HTTP_X_FORWARDED_FOR' => '203.0.113.5'], ['198.51.100.1']) === '203.0.113.5');
 
+echo "\nDashboard switch\n";
+require_once __DIR__ . '/../lib/theme.php';
+check('the dashboard is on unless the settings say otherwise', ls_dashboard_enabled([]) === true && ls_dashboard_enabled(['dashboard' => true]) === true);
+check("'dashboard' => false turns it off", ls_dashboard_enabled(['dashboard' => false]) === false);
+check("'off', 'no' and 0 turn it off too", ls_dashboard_enabled(['dashboard' => 'off']) === false && ls_dashboard_enabled(['dashboard' => 'no']) === false && ls_dashboard_enabled(['dashboard' => 0]) === false);
+check('an unreadable value leaves it on', ls_dashboard_enabled(['dashboard' => 'banana']) === true);
+check('whatever theme is active has a closed page (the default theme fills in)', ls_theme_file('templates', 'closed.php') !== null);
+ob_start();
+ls_render('closed');
+$closedActive = (string) ob_get_clean();
+ob_start();
+include LS_ROOT . '/themes/default/templates/closed.php';
+$closedDefault = (string) ob_get_clean();
+check('the default closed page says the dashboard is turned off', str_contains($closedDefault, 'turned off'));
+check('no closed page has a form or a password field', !str_contains($closedActive . $closedDefault, '<form') && !str_contains($closedActive . $closedDefault, 'password'));
+
 echo "\n$passed passed, $failed failed\n";
 exit($failed ? 1 : 0);

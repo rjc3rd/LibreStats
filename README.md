@@ -47,6 +47,8 @@ PHP 8.2 or newer and MySQL or MariaDB. No other services.
 6. Put the one-line script on your pages.
 7. Open your LibreStats address in a browser. The first time, it asks you to create your login, then your first website. After that, websites, goals and logins are all managed on the dashboard's **Settings** tab (the `bin/` tools do the same from the command line).
 
+To run without the built-in dashboard, for example when another app reads the numbers through the data API, set `'dashboard' => false` in `config.php`. Visitors then see a short notice instead of a login or setup page. Tracking and the API keep working, and the `bin/` tools still manage websites and goals.
+
 Goals show as a funnel: a goal is reached when a visitor opens a page (like `/pricing`, or `/blog/*` for a whole section) or triggers an event you send from the page with `librestats("Signed up")` or `data-ls-event="Signed up"`. Every list can be downloaded as CSV.
 
 Want to see it before any real traffic? `php bin/demo.php` fills a site called `demo.example` with 90 days of made-up visits.
