@@ -258,6 +258,11 @@ check('team.password only reaches the named team', $st === 409 && password_verif
 check('team.remove only reaches the named team', $st === 409 && one($pdo, "SELECT COUNT(*) FROM users WHERE id = $zed") == 1);
 [$st] = $api(['op' => 'team.sites', 'acct' => '9', 'sites' => ['third.net']]);
 check('team.sites changes the team\'s websites', $st === 200 && one($pdo, "SELECT sites FROM users WHERE id = $zed") === 'third.net' && one($pdo, "SELECT sites FROM users WHERE email = 'sam'") === 'third.net');
+[$st] = $api(['op' => 'team.sites', 'acct' => '9', 'sites' => []]);
+check('team.sites with an empty list leaves the team\'s people with no websites at all (how an app pauses a team)',
+    $st === 200 && one($pdo, "SELECT sites FROM users WHERE id = $zed") === '' && ls_user_sites($pdo, ['role' => 'viewer', 'sites' => (string) one($pdo, "SELECT sites FROM users WHERE id = $zed")]) === []);
+[$st] = $api(['op' => 'team.sites', 'acct' => '9', 'sites' => ['third.net']]);
+check('and giving the websites back lets them see them again', $st === 200 && one($pdo, "SELECT sites FROM users WHERE id = $zed") === 'third.net');
 [$st] = $api(['op' => 'team.remove', 'acct' => '9', 'member' => $zed]);
 check('team.remove deletes the login', $st === 200 && one($pdo, "SELECT COUNT(*) FROM users WHERE id = $zed") == 0);
 check('a team id has to be short and plain, and every request names one', $api(['op' => 'team.list'])[0] === 400 && $api(['op' => 'team.list', 'acct' => 'a b'])[0] === 400
