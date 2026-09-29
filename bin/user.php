@@ -17,13 +17,13 @@ require __DIR__ . '/../lib/admin.php';
 function ask_password(): string
 {
     $tty = stream_isatty(STDIN);
-    echo 'Password (10 characters or more): ';
+    echo 'Password (10 to 72 characters): ';
     $tty && shell_exec('stty -echo');
     $p = rtrim((string) fgets(STDIN), "\r\n");
     $tty && shell_exec('stty echo');
     echo "\n";
-    if (strlen($p) < 10) {
-        exit("Too short.\n");
+    if (strlen($p) < 10 || strlen($p) > 72) {
+        exit("Use 10 to 72 characters.\n");
     }
     return $p;
 }

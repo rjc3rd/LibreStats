@@ -94,8 +94,8 @@ function ls_team_add(PDO $pdo, string $team, string $scope, string $login, strin
 // A new password for somebody on the team (their leader sets it, nobody else can reset it).
 function ls_team_password(PDO $pdo, string $team, int $userId, string $password): ?string
 {
-    if (strlen($password) < 10) {
-        return 'Please use a password of 10 characters or more.';
+    if (strlen($password) < 10 || strlen($password) > 72) {
+        return 'Please use a password of 10 to 72 characters.';
     }
     $stmt = $pdo->prepare("UPDATE users SET password_hash = :h WHERE id = :i AND team = :t AND role = 'viewer'");
     $stmt->execute(['h' => password_hash($password, PASSWORD_DEFAULT), 'i' => $userId, 't' => $team]);
@@ -133,7 +133,7 @@ function ls_team_api(PDO $pdo, array $key, array $input, ?int $limit): array
             return [200, ['ok' => true,
                 'members' => array_map(fn ($m) => ['id' => (int) $m['id'], 'username' => $m['email'], 'sites' => ls_scope_list($m['sites']) ?? '*', 'joined' => ls_iso($m['created_at'])], $team['members']),
                 'seats' => ['used' => $team['used'], 'limit' => $limit]]];
-        case 'team.add':
+        case 'team.create':
         case 'team.sites':
             // The websites must be named on purpose ("*" for all of them), so leaving them out can never share everything.
             $scope = isset($input['sites']) && ($input['sites'] === '*' || is_array($input['sites'])) ? ls_scope_narrow((string) $key['sites'], $input['sites']) : null;

@@ -135,8 +135,8 @@ function ls_user_add(PDO $pdo, string $email, string $password, string $role = '
     if (!ls_valid_login($email)) {
         return 'Please enter an email address, or a username of 3 to 64 letters, digits, dots, dashes or underscores.';
     }
-    if (strlen($password) < 10) {
-        return 'Please use a password of 10 characters or more.';
+    if (strlen($password) < 10 || strlen($password) > 72) {
+        return 'Please use a password of 10 to 72 characters.';
     }
     if (!in_array($role, ['admin', 'viewer'], true)) {
         return 'Choose whether they can change settings or only look at the numbers.';
@@ -157,8 +157,8 @@ function ls_user_password(PDO $pdo, int $userId, string $current, string $new): 
     if (!password_verify($current, (string) $stmt->fetchColumn())) {
         return 'Your current password isn’t right.';
     }
-    if (strlen($new) < 10) {
-        return 'Please use a new password of 10 characters or more.';
+    if (strlen($new) < 10 || strlen($new) > 72) {
+        return 'Please use a new password of 10 to 72 characters.';
     }
     $pdo->prepare("UPDATE users SET password_hash = :h WHERE id = :u")->execute(['h' => password_hash($new, PASSWORD_DEFAULT), 'u' => $userId]);
     return null;

@@ -64,7 +64,7 @@ An app that runs LibreStats for other people, a hosting panel for example, can m
 | `op` | Other fields | What it does |
 | --- | --- | --- |
 | `team.list` | | The team's viewers (`id`, `username`, `sites`, `joined`) and its places (`seats`: `used`, `limit`). |
-| `team.add` | `username`, `password`, `sites` | Adds a viewer. The person who leads the team chooses the username and password. |
+| `team.create` | `username`, `password`, `sites` | Adds a viewer. The person who leads the team chooses the username and password. |
 | `team.password` | `member`, `password` | Sets a new password for a viewer (there is no "forgot my password" here: the team's leader does it). |
 | `team.remove` | `member` | Deletes a viewer's login. Their open sessions end with their next click. |
 | `team.sites` | `sites` | Changes which websites everyone on the team can see. |

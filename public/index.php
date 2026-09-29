@@ -37,8 +37,8 @@ if ($noUsers && ls_first_run_enabled()) {
         $password = (string) ($_POST['password'] ?? '');
         if (!ls_valid_login($email)) {
             $error = 'Please enter an email address, or a username of 3 to 64 letters, digits, dots, dashes or underscores.';
-        } elseif (strlen($password) < 10) {
-            $error = 'Please use a password of 10 characters or more.';
+        } elseif (strlen($password) < 10 || strlen($password) > 72) {
+            $error = 'Please use a password of 10 to 72 characters.';
         } elseif ($password !== (string) ($_POST['password2'] ?? '')) {
             $error = 'The two passwords don’t match.';
         } else {

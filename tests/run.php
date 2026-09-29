@@ -209,7 +209,7 @@ check('a team lists its own people only', array_column($list['members'], 'email'
 check('one team can\'t set another team\'s password', ls_team_password($pdo, '7', $wes, 'hijacked-password-1') !== null && password_verify('wess-password-1', (string) one($pdo, "SELECT password_hash FROM users WHERE id = $wes")));
 check('the leader sets a new password, which then works and the old one stops', ls_team_password($pdo, '7', $sam, 'sams-new-password-1') === null
     && ls_login($pdo, 'sam', 'sams-password-1', '203.0.113.61') !== null && ls_login($pdo, 'sam', 'sams-new-password-1', '203.0.113.62') === null);
-check('a new password has to be long enough', ls_team_password($pdo, '7', $sam, 'short') !== null);
+check('a new password has to be 10 to 72 characters', ls_team_password($pdo, '7', $sam, 'short') !== null && ls_team_password($pdo, '7', $sam, str_repeat('x', 73)) !== null && ls_user_add($pdo, 'longpass', str_repeat('x', 73)) !== null);
 check('an admin login can\'t be reached through a team', ls_team_password($pdo, '', (int) one($pdo, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"), 'hijacked-password-1') !== null);
 ls_team_set_sites($pdo, '7', 'third.net');
 check('changing a team\'s websites changes what its people see, at once', implode(',', array_column(ls_user_sites($pdo, ls_user($pdo)), 'domain')) === 'third.net');
@@ -231,17 +231,17 @@ check('junk in a list is dropped, and "*" inside a list is not everything', ls_s
 check('a list that is too long for a scope is refused', ls_scope_narrow('*', array_map(fn ($i) => "site$i-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example", range(1, 60))) === null);
 
 echo "The team API\n";
-[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'zed', 'password' => 'zeds-password-1', 'sites' => ['example.com']]);
-check('team.add makes a viewer', $st === 200 && $out['ok'] && one($pdo, "SELECT team FROM users WHERE email = 'zed'") === '9' && one($pdo, "SELECT sites FROM users WHERE email = 'zed'") === 'example.com');
-[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'yan', 'password' => 'yans-password-1']);
+[$st, $out] = $api(['op' => 'team.create', 'acct' => '9', 'username' => 'zed', 'password' => 'zeds-password-1', 'sites' => ['example.com']]);
+check('team.create makes a viewer', $st === 200 && $out['ok'] && one($pdo, "SELECT team FROM users WHERE email = 'zed'") === '9' && one($pdo, "SELECT sites FROM users WHERE email = 'zed'") === 'example.com');
+[$st, $out] = $api(['op' => 'team.create', 'acct' => '9', 'username' => 'yan', 'password' => 'yans-password-1']);
 check('the websites have to be named, so leaving them out never shares everything', $st === 400 && !$out['ok'] && one($pdo, "SELECT COUNT(*) FROM users WHERE email = 'yan'") == 0);
-[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'yan', 'password' => 'yans-password-1', 'sites' => 'example.com']);
+[$st, $out] = $api(['op' => 'team.create', 'acct' => '9', 'username' => 'yan', 'password' => 'yans-password-1', 'sites' => 'example.com']);
 check('a string other than * isn\'t a list of websites', $st === 400 && one($pdo, "SELECT COUNT(*) FROM users WHERE email = 'yan'") == 0);
-[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'yan', 'password' => 'yans-password-1', 'sites' => ['third.net']], ['id' => 2, 'sites' => 'example.com', 'team' => 1]);
+[$st, $out] = $api(['op' => 'team.create', 'acct' => '9', 'username' => 'yan', 'password' => 'yans-password-1', 'sites' => ['third.net']], ['id' => 2, 'sites' => 'example.com', 'team' => 1]);
 check('a key limited to some websites can\'t share others', $st === 200 && one($pdo, "SELECT sites FROM users WHERE email = 'yan'") === '');
-[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'zed', 'password' => 'zeds-password-1', 'sites' => '*']);
+[$st, $out] = $api(['op' => 'team.create', 'acct' => '9', 'username' => 'zed', 'password' => 'zeds-password-1', 'sites' => '*']);
 check('a taken username answers 409 with a reason', $st === 409 && !$out['ok'] && str_contains($out['error'], 'already taken'));
-[$st, $out] = $api(['op' => 'team.add', 'acct' => '9', 'username' => 'xia', 'password' => 'xias-password-1', 'sites' => '*'], null, 2);
+[$st, $out] = $api(['op' => 'team.create', 'acct' => '9', 'username' => 'xia', 'password' => 'xias-password-1', 'sites' => '*'], null, 2);
 check('a full team answers 409', $st === 409 && str_contains($out['error'], 'no free places'));
 [$st, $out] = $api(['op' => 'team.list', 'acct' => '9']);
 check('team.list shows the team, its places and each person\'s websites and join date',

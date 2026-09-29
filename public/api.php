@@ -8,7 +8,7 @@
 //     api.php?report=live&site=example.com
 //   range: today, 7d, 30d, 90d, 12m, or custom with from=YYYY-MM-DD&to=YYYY-MM-DD.
 //   A key made with --team can also manage viewers (people who can only look) for the teams the app runs:
-//     POST api.php?team   with JSON {"op": "team.list|team.add|team.password|team.remove|team.sites", "acct": "…", …}
+//     POST api.php?team   with JSON {"op": "team.list|team.create|team.password|team.remove|team.sites", "acct": "…", …}
 //     (lib/team.php, ls_team_api(), and the README describe each operation)
 // A key only ever sees the websites it was made for, and can only share those with a team.
 
